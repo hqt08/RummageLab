@@ -1,7 +1,8 @@
 # Product-owner decision record
 
-These decisions define product scope and data handling. All current items are
-resolved. When a future material choice needs human direction, add it here as an
+These decisions define product scope and data handling. The product-scope items
+below are resolved; pending deployment and submission actions are tracked at the
+end. When a future material choice needs human direction, add it here as an
 unchecked item rather than silently assuming an answer.
 
 - [x] **Live demo learner:** A parent and their 3-year-old will be the demo
@@ -78,3 +79,30 @@ unchecked item rather than silently assuming an answer.
       approved allowlisted tags may shape one next recommendation. This does not
       authorize voice/transcription, persistence, profiles, analytics,
       authentication, PWA work, live weather, or deployment.
+
+## Deployment and submission owner actions
+
+- [ ] **Create the Vercel production project:** Sign in to Vercel, import the
+      public `hqt08/RummageLab` GitHub repository, keep the standard Next.js
+      framework and repository-root settings, set `main` as the production
+      branch, and deploy once with no environment variables. Do not continue if
+      any visible credit indicator is below $30. Send the resulting stable
+      production URL back to the deployment task for fresh-browser verification
+      and documentation.
+- [ ] **Optionally enable the live GPT-5.6 path in Vercel:** In the approved
+      Vercel project settings, first confirm an owner-controlled OpenAI project
+      spend cap or alert and that no visible credit indicator is below $30.
+      Because the prototype routes do not include an application-level abuse
+      gate, prefer the no-key seeded production deployment for public judging.
+      If live mode is still approved, add only `OPENAI_API_KEY` as a server-side
+      Production secret and redeploy. Do not paste the value into source, chat,
+      build logs, preview settings, or a `NEXT_PUBLIC_` variable. The public
+      seeded path must continue to work without this secret.
+- [ ] **Record real Codex evidence:** In the core build task, run `/feedback`
+      and replace the `TBD` core Session ID in `README.md` and
+      `docs/codex-decisions.md`. Never invent or reuse an unrelated ID.
+- [ ] **Finish submission-owned evidence:** Capture the under-three-minute
+      English demo video with audio using `docs/demo-script.md`, then provide the
+      public video URL and confirm the English project description, API/key
+      disclosure, public source URL, and judging-period availability against the
+      official submission form.
