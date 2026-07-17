@@ -24,6 +24,27 @@ function uploadRequest(
   } as RequestInit);
 }
 
+function controlledTotalOverflowRequest(): Request {
+  const chunk = new Uint8Array(1024 * 1024);
+  let emitted = 0;
+  const body = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      if (emitted >= 10) {
+        controller.close();
+        return;
+      }
+      emitted += 1;
+      controller.enqueue(chunk);
+    },
+  });
+  return new Request("http://local/upload", {
+    method: "POST",
+    headers: { "content-type": "multipart/form-data; boundary=controlled" },
+    body,
+    duplex: "half",
+  } as RequestInit);
+}
+
 describe("parseTransientPhotoMultipart", () => {
   it("streams the expected fields without retaining a filename", async () => {
     const request = uploadRequest(new Uint8Array([1, 2, 3]));
@@ -62,8 +83,7 @@ describe("parseTransientPhotoMultipart", () => {
   });
 
   it("terminates a request over the total streaming limit", async () => {
-    const request = uploadRequest(new Uint8Array(10 * 1024 * 1024));
-    request.headers.delete("content-length");
+    const request = controlledTotalOverflowRequest();
 
     await expect(parseTransientPhotoMultipart(request)).rejects.toMatchObject({
       code: "request_too_large",
