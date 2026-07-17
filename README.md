@@ -130,7 +130,7 @@ never execute arbitrary generated code.
 | Concern | Choice | Why |
 | --- | --- | --- |
 | Product surface | Next.js, React, TypeScript | Fast public deployment, phone-friendly, easy judge access |
-| Source and hosting | Public [GitHub repository](https://github.com/hqt08/RummageLab) + planned Vercel deployment | Reviewable source now; PR previews and a stable production URL after deployment |
+| Source and hosting | Public [GitHub repository](https://github.com/hqt08/RummageLab) + [Vercel demo](https://rummage-lab.vercel.app/) | Reviewable source and a stable seeded production URL |
 | Model contracts | GPT-5.6 + Zod structured schemas | Consistent, inspectable, parent-safe rendering boundaries |
 | Reflection MVP | Optional typed parent note or Skip; voice deferred | Deterministic screening, strict structured output, explicit tag approval |
 | Data | Seeded, no-login parent context; preferences later | Keeps the demo reliable without sensitive child data |
@@ -200,7 +200,7 @@ shell.
    tags to create exactly one session-only try-next
    idea, then reset or reload to clear the demo.
 
-Before submission, add the public URL and final under-three-minute demo video.
+Before submission, add the final under-three-minute demo video.
 Use the
 [submission checklist](docs/submission-checklist.md) rather than relying on
 memory.
