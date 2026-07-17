@@ -8,6 +8,9 @@
 - [x] README identifies the seeded sample data and gives testing instructions.
 - [x] Lint, typecheck, 33 tests, and production build pass under Node 24; rerun
       before submission.
+- [x] GitHub Actions verifies pull requests and `main` pushes with the pinned
+      Node 24 and pnpm 9.15.9 toolchain, frozen install, lint, typecheck, tests,
+      and production build without secrets; first hosted PR run passed.
 - [ ] A seeded fallback exists, but verify the automatic model/API failure route
       after live integration is connected.
 
