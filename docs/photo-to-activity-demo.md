@@ -21,22 +21,26 @@ placemat:
 Do not include the child, faces, mail, labels, small loose pieces, glass,
 magnets, batteries, or hot cookware in the image.
 
-The bundled demo photo will live at:
+The bundled demo photo lives at:
 
 ```text
 public/demo/kitchen-sound-detectives.jpg
 ```
 
-It is intentionally not included until the family chooses or creates the final
-demo photograph.
+It is an original, rights-safe image generated for this repository with
+OpenAI's built-in image generation tool. Its prompt summary, creation date,
+rights note, and runtime boundary are recorded in
+[`public/demo/README.md`](../public/demo/README.md). The image contains only the
+three allowlisted material types and is never uploaded to an external service
+or analyzed in the seeded path.
 
 ## Five visible UI beats
 
-1. **Set the stage** — Parent chooses `3–4 years` and sees “grown-up co-play;
-   objects only in the photo.”
-2. **Take, choose, or type** — Parent captures the arranged materials, loads the
-   prepared image fixture, or types materials such as “plastic container, wooden
-   spoon, dish towel.” All three routes converge on the same confirmation step.
+1. **Set the stage** — The seeded case shows `3–4 years`, “grown-up co-play,”
+   and an object-only prepared photo. Choosing another stage is future work.
+2. **Review the prepared kit** — The parent sees the local image fixture and an
+   explicit statement that nothing was uploaded or analyzed. Capture and typed
+   material entry are not implemented in this slice.
 3. **See, then confirm** — The app shows three suggested cards: `plastic
    container`, `wooden spoon`, and `dish towel`. The parent taps to confirm each
    and confirms that all items are safe, room-temperature, and supervised.
@@ -44,23 +48,23 @@ demo photograph.
    tap gently; copy a two-beat rhythm; make a rain-to-thunder-to-quiet story.
    The 3-year-old interacts mainly with the real objects; the screen is only a
    visual prompt and parent guide.
-5. **Reflect and adapt** — Parent records or types: “She said boom, copied two
-   taps, and needed help waiting.” The app shows an editable “What you noticed”
-   card, not a score, and proposes a short next sound-pattern activity with more
-   turn-taking support.
+5. **Reflect and adapt** — The parent may skip reflection or edit a clearly
+   prepared observation. Only checked allowlisted tags—not the note—can create
+   exactly one session-only next sound-pattern idea.
 
 ## Live and seeded modes
 
 | Mode | What happens | How to present it honestly |
 | --- | --- | --- |
-| Live | GPT-5.6 reads the object-only photo and returns a constrained `PhotoInventory` | Show the analysis result and parent confirmation |
-| Seeded fallback | The prepared photo loads a matching `PhotoInventory` fixture | Label the UI `Demo mode`; do not describe it as a live call |
+| Live (future) | GPT-5.6 reads the object-only photo and returns a constrained `PhotoInventory` | Show the analysis result and parent confirmation |
+| Seeded (implemented) | The prepared photo loads a matching, Zod-parsed `PhotoInventory` fixture | The persistent `Seeded demo` banner says there was no live analysis |
 
 Both modes must pass through the same validation and parent-confirmation step.
 That makes the fallback a reliability feature rather than a fake demonstration.
 
-Typed materials use the same flow: the parent sees normalized material cards,
-removes anything unsuitable, and confirms that only safe items enter the plan.
+Typed materials will use the same flow when implemented: the parent will see
+normalized material cards, remove anything unsuitable, and confirm that only
+safe items enter the plan.
 
 ## Parent-facing generated output
 
@@ -76,10 +80,16 @@ Developmental focus: descriptive words, cause and effect,
 early patterning, shared attention and turn-taking.
 ```
 
-## Acceptance criteria for later implementation
+## Implemented seeded-slice acceptance criteria
 
 - A parent can see exactly which suggested objects will be used.
-- The parent can remove a wrongly recognized or unsuitable item before planning.
-- The model cannot plan from unconfirmed items.
+- The quest cannot start until all three exact demo materials, the selected
+  weather tags, weather approval, and the adult safety checkpoint are present.
+- Every prepared payload is parsed through the existing Zod contracts before it
+  reaches the renderer.
 - The activity works with the seeded fixture and without a live API call.
-- The raw photo does not need to be kept after the inventory is confirmed.
+- Only the approved `sound_mix` renderer appears.
+- Reflection can be skipped; the prepared note never enters the next-activity
+  context.
+- At most one next suggestion is created from parent-approved allowlisted tags.
+- Reset and reload clear all demo state.

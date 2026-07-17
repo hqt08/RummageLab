@@ -4,17 +4,18 @@
 
 - Public source repository: `https://github.com/hqt08/RummageLab`.
 - Primary branch: `main`; it remains the production and integration branch.
-- GitHub initialized `main` with only the standard Apache-2.0 `LICENSE`; local
-  `main` tracks that commit and the remaining scaffold is not yet committed.
+- The reviewed scaffold baseline is committed on `main` and synchronized with
+  `origin/main` at `aab2556`.
 - Hackathon commit identity: repository-local
   `hqt08 <1230758+hqt08@users.noreply.github.com>`.
 - Public app: GitHub stores the source; Vercel is the confirmed Next.js host.
 - Local execution remains the demonstration fallback.
-- No feature implementation or production deployment exists yet.
+- The first seeded feature slice is developed on the short-lived local branch
+  `feat/kitchen-sound-demo`. No feature branch has been pushed or deployed.
 
 ## Publish-readiness gate
 
-Do not push the first scaffold commit until all of these are true:
+The first scaffold commit was published only after all of these were true:
 
 - the Apache-2.0 `LICENSE` and package metadata are present;
 - the repository-local Git author remains the confirmed and verified GitHub
@@ -24,11 +25,11 @@ Do not push the first scaffold commit until all of these are true:
 - a final tracked-file secret and private-data scan is clean; and
 - `origin` points to the public `hqt08/RummageLab` repository.
 
-The current scaffold installs reproducibly from `pnpm-lock.yaml` under Node 24.
-`pnpm check` passes, the full dependency audit reports no known
-vulnerabilities, and a production-server smoke check returns the intentional
-placeholder page. Initial tests cover schema/safety contracts only; this is a
-scaffold gate, not evidence that product behavior is tested.
+The baseline installs reproducibly from `pnpm-lock.yaml` under Node 24.
+`pnpm check`, the dependency audit, production-server smoke check, and staged
+privacy/secret review passed before publication. The first feature branch adds
+fixture, state, component, and interaction tests; it still adds no live API or
+deployment.
 
 The staged-file review found no credential patterns, private keys, raw media,
 unexpected binaries, or oversized files. The only email is the intentional
@@ -47,10 +48,10 @@ existing rights.
 
 ## Worktree recommendation
 
-Do **not** use a worktree for the current decision-and-scaffolding session. First
-create a reviewed scaffold baseline commit on `main`. After that, use
-Codex-managed worktrees selectively for independent slices that benefit from
-parallel work.
+With the reviewed scaffold baseline now on `main`, use Codex-managed worktrees
+selectively for independent slices that benefit from parallel work. A normal
+short-lived branch remains appropriate when the slice rewrites shared UI
+hotspots and needs one integrated local browser pass.
 
 Good candidates:
 

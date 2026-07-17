@@ -1,0 +1,718 @@
+"use client";
+
+import Image from "next/image";
+import React, { useEffect, useReducer, useRef, useState } from "react";
+
+import { SoundMixTool } from "./sound-mix-tool";
+import {
+  canCreateKitchenSoundNextSuggestion,
+  canStartKitchenSoundQuest,
+  createInitialKitchenSoundDemoState,
+  kitchenSoundDemoReducer,
+  type KitchenSoundDemoAction,
+  type KitchenSoundDemoPhase,
+} from "../lib/demo/demo-state";
+import {
+  KITCHEN_SOUND_DEMO_LOCATION_LABEL,
+  KITCHEN_SOUND_AVAILABLE_WEATHER_TAGS,
+  KITCHEN_SOUND_REQUIRED_MATERIALS,
+  kitchenSoundPhotoInventory,
+  kitchenSoundQuest,
+  type DemoObservationTag,
+  type DemoWeatherTag,
+} from "../lib/demo/kitchen-sound-detectives";
+import { findLearningFocus } from "../lib/data/learning-focuses";
+import type { AllowedMaterialCategory } from "../lib/schemas";
+
+const materialDetails: Record<AllowedMaterialCategory, string> = {
+  large_empty_plastic_container: "Large, empty, and unbreakable",
+  wooden_kitchen_utensil: "Smooth, intact, and room-temperature",
+  silicone_kitchen_utensil: "Intact and room-temperature",
+  soft_cloth: "Clean, soft, and folded",
+  paper_or_cardboard: "Large and free of staples",
+  board_book: "Intact, sturdy pages",
+  large_soft_ball: "Too large to fit in a child’s mouth",
+  large_natural_object: "Large, clean, and adult-checked",
+};
+
+const weatherLabels: Record<DemoWeatherTag, string> = {
+  sunny: "Sunny",
+  cloudy: "Cloudy",
+  rainy: "Rainy",
+  snowy: "Snowy",
+  windy: "Windy",
+  hot: "Hot",
+  cold: "Cold",
+  unknown: "Not sure",
+};
+
+const observationTagLabels: Record<DemoObservationTag, string> = {
+  sound_play: "Sound play",
+  loud_quiet_contrast: "Loud / quiet contrast",
+  two_beat_pattern: "Two-beat pattern",
+  turn_taking: "Turn taking",
+  descriptive_words: "Descriptive words",
+  cause_and_effect: "Cause and effect",
+  movement_play: "Movement play",
+  texture_exploration: "Texture exploration",
+};
+
+const phaseProgress: Record<KitchenSoundDemoPhase, string> = {
+  kit_review: "Case file 1 of 4 · Review the kit",
+  quest: "Case file 2 of 4 · Follow the sounds",
+  reflection: "Case file 3 of 4 · Parent choice",
+  observation_review: "Case file 3 of 4 · Review what you noticed",
+  next_suggestion: "Case file 4 of 4 · One try-next idea",
+  complete: "Case file 4 of 4 · All done",
+};
+
+function StageHeader({
+  eyebrow,
+  title,
+  deck,
+  headingRef,
+}: {
+  eyebrow: string;
+  title: string;
+  deck: string;
+  headingRef: React.RefObject<HTMLHeadingElement | null>;
+}) {
+  return (
+    <header className="stage-header">
+      <p className="eyebrow">{eyebrow}</p>
+      <h1 className="stage-title" ref={headingRef} tabIndex={-1}>
+        {title}
+      </h1>
+      <p className="stage-deck">{deck}</p>
+    </header>
+  );
+}
+
+export function KitchenSoundDemo() {
+  const [state, dispatch] = useReducer(
+    kitchenSoundDemoReducer,
+    createInitialKitchenSoundDemoState(),
+  );
+  const [demoCityLabel, setDemoCityLabel] = useState<string>(
+    KITCHEN_SOUND_DEMO_LOCATION_LABEL,
+  );
+  const [soundTrail, setSoundTrail] = useState<string[]>([]);
+  const [announcement, setAnnouncement] = useState("");
+  const [resetVersion, setResetVersion] = useState(0);
+  const demoMainRef = useRef<HTMLElement>(null);
+  const stageHeadingRef = useRef<HTMLHeadingElement>(null);
+  const shouldFocusStageRef = useRef(false);
+
+  useEffect(() => {
+    if (!shouldFocusStageRef.current) {
+      return;
+    }
+
+    shouldFocusStageRef.current = false;
+    stageHeadingRef.current?.focus();
+  }, [state.phase, resetVersion]);
+
+  function transitionDemo(action: KitchenSoundDemoAction) {
+    shouldFocusStageRef.current = true;
+    dispatch(action);
+  }
+
+  function focusMainContent(event: React.MouseEvent<HTMLAnchorElement>) {
+    event.preventDefault();
+    demoMainRef.current?.focus();
+    demoMainRef.current?.scrollIntoView({ block: "start" });
+  }
+
+  function resetDemo() {
+    shouldFocusStageRef.current = true;
+    dispatch({ type: "RESET" });
+    setDemoCityLabel(KITCHEN_SOUND_DEMO_LOCATION_LABEL);
+    setSoundTrail([]);
+    setAnnouncement("Demo reset; session data cleared.");
+    setResetVersion((version) => version + 1);
+  }
+
+  function addSound(soundLabel: string) {
+    setSoundTrail((trail) =>
+      trail.length >= 3 ? [...trail.slice(1), soundLabel] : [...trail, soundLabel],
+    );
+  }
+
+  const canStart = canStartKitchenSoundQuest(state);
+  const missingMaterialCount =
+    KITCHEN_SOUND_REQUIRED_MATERIALS.length - state.confirmedMaterials.length;
+  const gateParts = [
+    missingMaterialCount > 0
+      ? `${missingMaterialCount} material${missingMaterialCount === 1 ? "" : "s"}`
+      : null,
+    state.selectedWeatherTags.length === 0 ? "one weather tag" : null,
+    !state.parentApprovedWeather ? "weather approval" : null,
+    !state.parentConfirmedSafety ? "the safety check" : null,
+  ].filter(Boolean);
+
+  const learningFocuses = kitchenSoundQuest.developmentalFocusIds
+    .map((id) => findLearningFocus(id))
+    .filter((focus) => focus !== undefined);
+
+  const canCreateNextSuggestion =
+    canCreateKitchenSoundNextSuggestion(state);
+  const nextSuggestionGateParts = state.observationDraft
+    ? [
+        state.observationDraft.parentSummary.trim().length === 0
+          ? "a short reviewed summary (kept out of the suggestion)"
+          : null,
+        state.observationDraft.interestTags.length === 0
+          ? "at least one interest tag"
+          : null,
+      ].filter(Boolean)
+    : [];
+
+  const initialObservationInterestTags = [
+    "sound_play",
+    "two_beat_pattern",
+  ] as const satisfies readonly DemoObservationTag[];
+  const initialObservationSupportTags = [
+    "turn_taking",
+  ] as const satisfies readonly DemoObservationTag[];
+
+  return (
+    <div className="demo-shell">
+      <a className="skip-link" href="#demo-content" onClick={focusMainContent}>
+        Skip to the case file
+      </a>
+
+      <header className="demo-header">
+        <div className="brand" aria-label="RummageLab">
+          <span aria-hidden="true" className="brand-mark">
+            R
+          </span>
+          <p className="wordmark">RummageLab</p>
+        </div>
+
+        <div className="seeded-banner" role="note">
+          <strong>Seeded demo</strong>
+          <span>
+            Prepared example—no live photo, weather, voice, or GPT analysis.
+          </span>
+        </div>
+
+        <div className="header-actions">
+          <button className="text-button" onClick={resetDemo} type="button">
+            Reset demo
+          </button>
+        </div>
+      </header>
+
+      <main
+        className="demo-main"
+        id="demo-content"
+        ref={demoMainRef}
+        tabIndex={-1}
+      >
+        <p className="sr-only" aria-live="polite" role="status">
+          {announcement}
+        </p>
+
+        {state.phase === "kit_review" ? (
+          <section className="stage" data-phase="kit-review">
+            <StageHeader
+              deck="Turn three ordinary kitchen things into an 8-minute sound hunt—grown-up led, screen-light, and ready without an API key."
+              eyebrow={phaseProgress[state.phase]}
+              headingRef={stageHeadingRef}
+              title="Kitchen Sound Detectives"
+            />
+
+            <ul className="case-meta" aria-label="Activity details">
+              <li>Ages 3–4</li>
+              <li>8 minutes</li>
+              <li>Grown-up co-play</li>
+              <li>Indoors</li>
+            </ul>
+
+            <div className="kit-grid">
+              <figure className="photo-card">
+                <Image
+                  alt="Two empty plastic containers, a wooden spoon, and a folded teal dish towel arranged on a plain table."
+                  className="demo-photo"
+                  height={1086}
+                  priority
+                  src="/demo/kitchen-sound-detectives.jpg"
+                  width={1448}
+                />
+                <figcaption className="photo-caption">
+                  <span className="specimen-label">Object-only demo photo</span>
+                  <span>
+                    Prepared local fixture · no people, faces, mail, or identifying
+                    details. Nothing was uploaded or analyzed.
+                  </span>
+                </figcaption>
+              </figure>
+
+              <section className="confirmation-panel" aria-labelledby="kit-title">
+                <p className="panel-kicker">Parent checkpoint</p>
+                <h2 className="panel-title" id="kit-title">
+                  You decide what enters the quest.
+                </h2>
+                <p className="panel-copy">
+                  These three suggestions came from a prepared fixture. Confirm
+                  what is present and safe before any activity context is built.
+                </p>
+
+                <fieldset>
+                  <legend>Confirm the material kit</legend>
+                  <div className="check-list">
+                    {kitchenSoundPhotoInventory.suggestedItems.map((item) => {
+                      const checked = state.confirmedMaterials.includes(
+                        item.allowedMaterialCategory,
+                      );
+
+                      return (
+                        <label className="check-row" key={item.allowedMaterialCategory}>
+                          <input
+                            checked={checked}
+                            onChange={() =>
+                              dispatch({
+                                type: "TOGGLE_MATERIAL",
+                                material: item.allowedMaterialCategory,
+                              })
+                            }
+                            type="checkbox"
+                          />
+                          <span className="check-copy">
+                            {item.suggestedLabel}
+                            <span className="check-detail">
+                              {materialDetails[item.allowedMaterialCategory]}
+                            </span>
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </fieldset>
+
+                <div className="context-block">
+                  <fieldset>
+                    <legend>Confirm the demo weather tags</legend>
+                    <div className="city-card">
+                      <label className="city-field">
+                        <span className="city-label">
+                          Public demo city label
+                        </span>
+                        <input
+                          aria-describedby="demo-city-boundary"
+                          autoComplete="off"
+                          className="city-input"
+                          maxLength={60}
+                          onChange={(event) =>
+                            setDemoCityLabel(event.currentTarget.value)
+                          }
+                          type="text"
+                          value={demoCityLabel}
+                        />
+                      </label>
+                      <p className="city-note" id="demo-city-boundary">
+                        Editable display only—not your location. Use a public
+                        city, not an address. This text never enters the activity
+                        context, triggers a lookup, or leaves React memory.
+                      </p>
+                    </div>
+
+                    <div className="chip-row">
+                      {KITCHEN_SOUND_AVAILABLE_WEATHER_TAGS.map((tag) => {
+                        const selected =
+                          state.selectedWeatherTags.includes(tag);
+                        const maximumSelected =
+                          state.selectedWeatherTags.length >= 4;
+
+                        return (
+                          <label className="chip-check" key={tag}>
+                            <input
+                              checked={selected}
+                              disabled={maximumSelected && !selected}
+                              onChange={() =>
+                                dispatch({ type: "TOGGLE_WEATHER_TAG", tag })
+                              }
+                              type="checkbox"
+                            />
+                            <span>{weatherLabels[tag]}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                    <p className="chip-note">
+                      Rainy and cold are prepared suggestions. Choose 1–4 broad
+                      tags, then approve the final set.
+                    </p>
+
+                    <label className="approval-row">
+                      <input
+                        checked={state.parentApprovedWeather}
+                        disabled={state.selectedWeatherTags.length === 0}
+                        onChange={(event) =>
+                          dispatch({
+                            type: "SET_WEATHER_APPROVED",
+                            approved: event.currentTarget.checked,
+                          })
+                        }
+                        type="checkbox"
+                      />
+                      <span className="check-copy">
+                        Approve these demo weather tags
+                        <span className="check-detail">
+                          Only the selected tags—not the city—enter the activity
+                          context.
+                        </span>
+                      </span>
+                    </label>
+                  </fieldset>
+                </div>
+
+                <div className="context-block">
+                  <label className="approval-row">
+                    <input
+                      checked={state.parentConfirmedSafety}
+                      onChange={(event) =>
+                        dispatch({
+                          type: "SET_SAFETY_CONFIRMED",
+                          confirmed: event.currentTarget.checked,
+                        })
+                      }
+                      type="checkbox"
+                    />
+                    <span className="check-copy">
+                      I checked the kit and we’ll play together
+                      <span className="check-detail">
+                        Items are empty, intact, room-temperature, unbreakable,
+                        and used with a grown-up within arm’s reach.
+                      </span>
+                    </span>
+                  </label>
+                  <p className="safety-callout">
+                    Stop if anything cracks, splinters, comes loose, feels
+                    uncomfortable, or the play stops feeling calm.
+                  </p>
+                </div>
+
+                <p className="gate-note" aria-live="polite">
+                  {canStart
+                    ? "Ready: the validated activity context can now be built."
+                    : `Still needed: ${gateParts.join(", ")}.`}
+                </p>
+
+                <div className="button-row">
+                  <button
+                    className="primary-button"
+                    disabled={!canStart}
+                    onClick={() => transitionDemo({ type: "START_QUEST" })}
+                    type="button"
+                  >
+                    Make our sound quest
+                  </button>
+                </div>
+              </section>
+            </div>
+          </section>
+        ) : null}
+
+        {state.phase === "quest" ? (
+          <section className="stage" data-phase="quest">
+            <StageHeader
+              deck="The real objects make the sounds. This approved screen only guides prediction, noticing, pattern play, and turns."
+              eyebrow={phaseProgress[state.phase]}
+              headingRef={stageHeadingRef}
+              title={kitchenSoundQuest.title}
+            />
+
+            <div className="quest-layout">
+              <div>
+                <article className="notebook-card">
+                  <p className="panel-kicker">Validated quest · 8 minutes</p>
+                  <h2 className="panel-title">Follow the clues</h2>
+                  <p className="parent-cue">
+                    Stay close. Tap gently on a stable surface and let your child
+                    point, copy, or choose a word—there is no right answer to score.
+                  </p>
+
+                  <ol className="quest-steps">
+                    {kitchenSoundQuest.steps.map((step) => (
+                      <li className="quest-step" key={`${step.minute}-${step.instruction}`}>
+                        <div>
+                          <span className="step-minute">Minute {step.minute}</span>
+                          <p className="step-copy">{step.instruction}</p>
+                        </div>
+                      </li>
+                    ))}
+                  </ol>
+
+                  <div className="focus-strip" aria-label="Developmental focus">
+                    {learningFocuses.map((focus) => (
+                      <span className="focus-chip" key={focus.id}>
+                        {focus.title}
+                      </span>
+                    ))}
+                  </div>
+
+                  <p className="safety-callout">
+                    <strong>Grown-up safety note:</strong>{" "}
+                    {kitchenSoundQuest.adultSafetyNote}
+                  </p>
+                </article>
+              </div>
+
+              <div>
+                <SoundMixTool
+                  onAdd={addSound}
+                  onClear={() => setSoundTrail([])}
+                  spec={kitchenSoundQuest.tool}
+                  trail={soundTrail}
+                />
+
+                <div className="button-row">
+                  <button
+                    className="primary-button"
+                    onClick={() => transitionDemo({ type: "FINISH_QUEST" })}
+                    type="button"
+                  >
+                    We finished the sound hunt
+                  </button>
+                </div>
+              </div>
+            </div>
+          </section>
+        ) : null}
+
+        {state.phase === "reflection" ? (
+          <section className="stage" data-phase="reflection">
+            <StageHeader
+              deck="Reflection is optional and parent-only. This seeded path does not ask for a recording or analyze any text."
+              eyebrow={phaseProgress[state.phase]}
+              headingRef={stageHeadingRef}
+              title="What did you notice?"
+            />
+
+            <div className="choice-grid">
+              <article className="choice-card">
+                <p className="panel-kicker">Finish privately</p>
+                <h2 className="panel-title">Skip reflection</h2>
+                <p className="panel-copy">
+                  End the activity now. No observation, adaptive tags, or next
+                  suggestion will be created.
+                </p>
+                <div className="button-row">
+                  <button
+                    className="secondary-button"
+                    onClick={() => transitionDemo({ type: "SKIP_REFLECTION" })}
+                    type="button"
+                  >
+                    Skip reflection
+                  </button>
+                </div>
+              </article>
+
+              <article className="choice-card">
+                <p className="panel-kicker">Prepared example</p>
+                <h2 className="panel-title">Review a demo observation</h2>
+                <p className="panel-copy">
+                  See how a parent can edit a prepared note and approve only
+                  allowlisted tags for one try-next idea.
+                </p>
+                <div className="button-row">
+                  <button
+                    className="primary-button"
+                    onClick={() =>
+                      transitionDemo({ type: "REVIEW_SEEDED_OBSERVATION" })
+                    }
+                    type="button"
+                  >
+                    Review demo observation
+                  </button>
+                </div>
+              </article>
+            </div>
+          </section>
+        ) : null}
+
+        {state.phase === "observation_review" && state.observationDraft ? (
+          <section className="stage" data-phase="observation-review">
+            <StageHeader
+              deck="Edit the prepared wording, then choose the small tag set you approve. The note itself can never shape the next idea."
+              eyebrow={phaseProgress[state.phase]}
+              headingRef={stageHeadingRef}
+              title="What you noticed"
+            />
+
+            <div className="observation-layout">
+              <article className="notebook-card">
+                <div className="seeded-stamp">Prepared demo observation</div>
+                <h2 className="panel-title">Parent review</h2>
+                <p className="panel-copy">
+                  No voice or text was analyzed. This editable example exists
+                  only in React memory and disappears on reset or reload.
+                </p>
+
+                <label className="text-field">
+                  Edit the parent summary
+                  <textarea
+                    aria-describedby="summary-boundary"
+                    maxLength={240}
+                    onChange={(event) =>
+                      dispatch({
+                        type: "EDIT_OBSERVATION_SUMMARY",
+                        parentSummary: event.currentTarget.value,
+                      })
+                    }
+                    value={state.observationDraft.parentSummary}
+                  />
+                </label>
+                <p className="privacy-note" id="summary-boundary">
+                  Keep private details out. This seeded demo does not screen or
+                  send the note, and the note is never used to make the next
+                  suggestion.
+                </p>
+              </article>
+
+              <article className="notebook-card">
+                <p className="panel-kicker">Adaptive boundary</p>
+                <h2 className="panel-title">Choose what can shape one idea</h2>
+                <p className="panel-copy">
+                  Only checked, allowlisted tags cross this boundary. Remove any
+                  tag you do not approve; keep at least one interest tag to make
+                  a try-next idea.
+                </p>
+
+                <fieldset className="tag-fieldset">
+                  <legend>What held their interest</legend>
+                  <div className="tag-grid">
+                    {initialObservationInterestTags.map((tag) => (
+                      <label className="chip-check" key={tag}>
+                        <input
+                          checked={state.observationDraft?.interestTags.includes(tag)}
+                          onChange={() =>
+                            dispatch({ type: "TOGGLE_INTEREST_TAG", tag })
+                          }
+                          type="checkbox"
+                        />
+                        <span>{observationTagLabels[tag]}</span>
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+
+                <fieldset className="tag-fieldset">
+                  <legend>What to support next time</legend>
+                  <div className="tag-grid">
+                    {initialObservationSupportTags.map((tag) => (
+                      <label className="chip-check" key={tag}>
+                        <input
+                          checked={state.observationDraft?.supportTags.includes(tag)}
+                          onChange={() =>
+                            dispatch({ type: "TOGGLE_SUPPORT_TAG", tag })
+                          }
+                          type="checkbox"
+                        />
+                        <span>{observationTagLabels[tag]}</span>
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+
+                <p className="boundary-note">
+                  Reload or reset clears the note and tags. No photo, city,
+                  name, voice, or history can be used.
+                </p>
+
+                <p className="gate-note" aria-live="polite">
+                  {canCreateNextSuggestion
+                    ? "Ready: only the checked tags can shape one suggestion."
+                    : `Still needed: ${nextSuggestionGateParts.join(", ")}.`}
+                </p>
+
+                <div className="button-row">
+                  <button
+                    className="primary-button"
+                    disabled={!canCreateNextSuggestion}
+                    onClick={() =>
+                      transitionDemo({ type: "CREATE_NEXT_SUGGESTION" })
+                    }
+                    type="button"
+                  >
+                    Use these tags once
+                  </button>
+                </div>
+              </article>
+            </div>
+          </section>
+        ) : null}
+
+        {state.phase === "next_suggestion" && state.nextSuggestion ? (
+          <section className="stage" data-phase="next-suggestion">
+            <StageHeader
+              deck="One app-authored, session-only invitation—connected only from the allowlisted tags you approved."
+              eyebrow={phaseProgress[state.phase]}
+              headingRef={stageHeadingRef}
+              title="Try next"
+            />
+
+            <article className="final-card">
+              <div className="final-stamp">One-time idea · 5 minutes</div>
+              <h2 className="panel-title">{state.nextSuggestion.title}</h2>
+              <p className="panel-copy">{state.nextSuggestion.invitation}</p>
+              <p className="panel-copy">
+                <strong>Why this connects:</strong>{" "}
+                {state.nextSuggestion.connection}
+              </p>
+              <div className="connection-tags" aria-label="Approved source tags">
+                {[
+                  ...state.nextSuggestion.basedOnTags.interestTags,
+                  ...state.nextSuggestion.basedOnTags.supportTags,
+                ].map((tag) => (
+                  <span key={tag}>{observationTagLabels[tag]}</span>
+                ))}
+              </div>
+              <p className="boundary-note">
+                Built only from the approved tags above. No note, photo, city,
+                name, voice, score, or history was used. There is no second
+                suggestion in this session.
+              </p>
+              <div className="button-row">
+                <button className="primary-button" onClick={resetDemo} type="button">
+                  Reset demo
+                </button>
+              </div>
+            </article>
+          </section>
+        ) : null}
+
+        {state.phase === "complete" ? (
+          <section className="stage" data-phase="complete">
+            <StageHeader
+              deck="The play can end without sharing anything. No observation or next-activity context was created."
+              eyebrow={phaseProgress[state.phase]}
+              headingRef={stageHeadingRef}
+              title="Case closed—nothing saved."
+            />
+            <article className="final-card">
+              <div className="final-stamp">Reflection skipped</div>
+              <h2 className="panel-title">All done</h2>
+              <p className="panel-copy">
+                The sound hunt is complete. Reset whenever you want to start the
+                prepared example from a clean in-memory state.
+              </p>
+              <div className="button-row">
+                <button className="primary-button" onClick={resetDemo} type="button">
+                  Reset demo
+                </button>
+              </div>
+            </article>
+          </section>
+        ) : null}
+      </main>
+
+      <footer className="privacy-footer">
+        Seeded demo · local fixtures only · no login · no API key · no external
+        service or model calls · no analytics · no browser storage. Reset or
+        reload starts over.
+      </footer>
+    </div>
+  );
+}
