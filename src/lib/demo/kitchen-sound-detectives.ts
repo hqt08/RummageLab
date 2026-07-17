@@ -35,6 +35,17 @@ export const KITCHEN_SOUND_SUGGESTED_WEATHER_TAGS = [
   "cold",
 ] as const satisfies readonly DemoWeatherTag[];
 
+export const KITCHEN_SOUND_AVAILABLE_WEATHER_TAGS = [
+  "sunny",
+  "cloudy",
+  "rainy",
+  "snowy",
+  "windy",
+  "hot",
+  "cold",
+  "unknown",
+] as const satisfies readonly DemoWeatherTag[];
+
 export const kitchenSoundMaterialInput = MaterialInputSchema.parse({
   source: "seeded_demo",
   fixtureId: KITCHEN_SOUND_DEMO_ID,
@@ -71,6 +82,7 @@ function hasExactlyRequiredMaterials(
   const selected = new Set(materials);
 
   return (
+    materials.length === KITCHEN_SOUND_REQUIRED_MATERIALS.length &&
     selected.size === KITCHEN_SOUND_REQUIRED_MATERIALS.length &&
     KITCHEN_SOUND_REQUIRED_MATERIALS.every((material) => selected.has(material))
   );
@@ -257,7 +269,7 @@ export const kitchenSoundQuest = parseKitchenSoundQuest(
   kitchenSoundActivityContext,
 );
 
-export const kitchenSoundObservationSuggestion =
+const parsedKitchenSoundObservationTemplate =
   ParentObservationSuggestionSchema.parse({
     source: "parent_reported",
     observedEvents: [
@@ -279,6 +291,18 @@ export const kitchenSoundObservationSuggestion =
     requiresParentReview: true,
     notAnAssessment: true,
   });
+
+/**
+ * Local fixture metadata prevents the contract-shaped preview from being
+ * mistaken for an already parent-reported or parent-approved observation.
+ * The nested suggestion is a template only; the reducer creates an authorized
+ * contract value after the parent explicitly reviews the draft and tags.
+ */
+export const kitchenSoundObservationFixture = {
+  mode: "seeded_demo",
+  requiresParentAdoption: true,
+  unapprovedTemplate: parsedKitchenSoundObservationTemplate,
+} as const;
 
 export function parseParentApprovedNextActivityContext(
   input: unknown,
@@ -363,7 +387,7 @@ export function buildReviewedObservationSuggestion(input: {
   });
 
   return ParentObservationSuggestionSchema.parse({
-    ...kitchenSoundObservationSuggestion,
+    ...kitchenSoundObservationFixture.unapprovedTemplate,
     parentSummary: input.parentSummary,
     nextActivityContext,
   });

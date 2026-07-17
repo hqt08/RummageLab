@@ -57,6 +57,16 @@ describe("Kitchen Sound Detectives confirmation gates", () => {
     expect(started.activityContext?.parentConfirmedSafety).toBe(true);
     expect(started.activityContext?.weather?.parentApproved).toBe(true);
     expect(started.activityContext?.confirmedMaterials).toHaveLength(3);
+
+    expect(
+      canStartKitchenSoundQuest({
+        ...ready,
+        confirmedMaterials: [
+          ...ready.confirmedMaterials,
+          ready.confirmedMaterials[0],
+        ],
+      }),
+    ).toBe(false);
   });
 
   it("requires weather reapproval whenever a suggested tag changes", () => {

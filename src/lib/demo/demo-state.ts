@@ -10,7 +10,7 @@ import {
   buildReviewedObservationSuggestion,
   createKitchenSoundActivityContext,
   createKitchenSoundNextSuggestion,
-  kitchenSoundObservationSuggestion,
+  kitchenSoundObservationFixture,
   type DemoObservationTag,
   type DemoWeatherTag,
   type KitchenSoundNextSuggestion,
@@ -108,6 +108,7 @@ function hasExactMaterialKit(
   const selected = new Set(materials);
 
   return (
+    materials.length === KITCHEN_SOUND_REQUIRED_MATERIALS.length &&
     selected.size === KITCHEN_SOUND_REQUIRED_MATERIALS.length &&
     KITCHEN_SOUND_REQUIRED_MATERIALS.every((material) => selected.has(material))
   );
@@ -127,13 +128,16 @@ export function canStartKitchenSoundQuest(
 }
 
 function makeObservationDraft(): ObservationDraft {
+  const observationTemplate =
+    kitchenSoundObservationFixture.unapprovedTemplate;
+
   return {
-    parentSummary: kitchenSoundObservationSuggestion.parentSummary,
+    parentSummary: observationTemplate.parentSummary,
     interestTags: [
-      ...kitchenSoundObservationSuggestion.nextActivityContext.interestTags,
+      ...observationTemplate.nextActivityContext.interestTags,
     ],
     supportTags: [
-      ...kitchenSoundObservationSuggestion.nextActivityContext.supportTags,
+      ...observationTemplate.nextActivityContext.supportTags,
     ],
   };
 }

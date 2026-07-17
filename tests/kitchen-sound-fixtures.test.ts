@@ -14,7 +14,7 @@ import {
   createKitchenSoundNextSuggestion,
   kitchenSoundActivityContext,
   kitchenSoundMaterialInput,
-  kitchenSoundObservationSuggestion,
+  kitchenSoundObservationFixture,
   kitchenSoundPhotoInventory,
   kitchenSoundQuest,
   parseKitchenSoundQuest,
@@ -35,9 +35,13 @@ describe("Kitchen Sound Detectives seeded fixtures", () => {
     expect(QuestSpecSchema.parse(kitchenSoundQuest)).toEqual(kitchenSoundQuest);
     expect(
       ParentObservationSuggestionSchema.parse(
-        kitchenSoundObservationSuggestion,
+        kitchenSoundObservationFixture.unapprovedTemplate,
       ),
-    ).toEqual(kitchenSoundObservationSuggestion);
+    ).toEqual(kitchenSoundObservationFixture.unapprovedTemplate);
+    expect(kitchenSoundObservationFixture).toMatchObject({
+      mode: "seeded_demo",
+      requiresParentAdoption: true,
+    });
   });
 
   it("keeps the object-only photo and confirmed context on the same exact material kit", () => {
@@ -61,7 +65,7 @@ describe("Kitchen Sound Detectives seeded fixtures", () => {
       inventory: kitchenSoundPhotoInventory,
       activity: kitchenSoundActivityContext,
       quest: kitchenSoundQuest,
-      observation: kitchenSoundObservationSuggestion,
+      observation: kitchenSoundObservationFixture,
     });
 
     expect(structuredBoundaries).not.toContain("Anchorage");
@@ -73,6 +77,17 @@ describe("Kitchen Sound Detectives seeded fixtures", () => {
     expect(() =>
       createKitchenSoundActivityContext({
         confirmedMaterials: KITCHEN_SOUND_REQUIRED_MATERIALS.slice(0, 2),
+        approvedWeatherTags: ["rainy"],
+        parentConfirmedSafety: true,
+      }),
+    ).toThrow(/three Kitchen Sound Detectives material categories/);
+
+    expect(() =>
+      createKitchenSoundActivityContext({
+        confirmedMaterials: [
+          ...KITCHEN_SOUND_REQUIRED_MATERIALS,
+          KITCHEN_SOUND_REQUIRED_MATERIALS[0],
+        ],
         approvedWeatherTags: ["rainy"],
         parentConfirmedSafety: true,
       }),
@@ -147,8 +162,14 @@ describe("parent-approved next activity boundary", () => {
       supportTags: ["turn_taking"],
     });
 
+    const reviewedSeededTemplate = buildReviewedObservationSuggestion({
+      parentSummary:
+        kitchenSoundObservationFixture.unapprovedTemplate.parentSummary,
+      interestTags: ["sound_play", "two_beat_pattern"],
+      supportTags: ["turn_taking"],
+    });
     const fromSeededSummary = createKitchenSoundNextSuggestion(
-      kitchenSoundObservationSuggestion.nextActivityContext,
+      reviewedSeededTemplate.nextActivityContext,
     );
     const fromEditedSummary = createKitchenSoundNextSuggestion(
       editedObservation.nextActivityContext,
@@ -163,7 +184,11 @@ describe("parent-approved next activity boundary", () => {
   });
 
   it("rejects empty, duplicate, overlapping, and non-allowlisted tags", () => {
-    const baseContext = kitchenSoundObservationSuggestion.nextActivityContext;
+    const baseContext = buildReviewedObservationSuggestion({
+      parentSummary: "Parent-reviewed demo wording.",
+      interestTags: ["sound_play", "two_beat_pattern"],
+      supportTags: ["turn_taking"],
+    }).nextActivityContext;
 
     expect(() =>
       parseParentApprovedNextActivityContext({
