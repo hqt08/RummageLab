@@ -2,7 +2,7 @@
 
 > Turn the things around you into moments of discovery for ages 0–6.
 
-**Status:** Seeded demo, local intake, and a deterministic runtime-contract seam · **Track:** Education
+**Status:** Seeded demo plus an optional live GPT-5.6 photo-to-activity path · **Track:** Education
 
 RummageLab helps a parent turn a few ordinary objects and a child’s curiosity
 into a developmentally appropriate moment of discovery. Every activity ends with
@@ -11,14 +11,16 @@ chat transcript.
 
 ## The core experience
 
-1. In the implemented demo, a parent uses a prepared kit, browser-local
-   object-photo preview, or small typed-material allowlist, then confirms the
+1. In the implemented demo, a parent uses a prepared kit, an object-photo
+   preview followed by optional live analysis, or a small typed-material allowlist, then confirms the
    same safe material inventory. The visible **Anchorage, Alaska** label and
    broad weather chips are prepared demo context—not a lookup or family location.
-2. The server-only runtime seam accepts only parent-approved `ActivityContext` and returns
+2. The server-only runtime accepts only parent-approved `ActivityContext` and returns
    a Zod-validated `ExperienceSpec`: a parent-led `RummageMoment` for ages 0–3,
-   or a short `QuestSpec` for ages 3–6. Its sole current provider is deterministic
-   and seeded; a real GPT-5.6 adapter remains future work.
+   or a short `QuestSpec` for ages 3–6. For the focused 3-year-old demo, an optional
+   live adapter uses GPT-5.6 to suggest an allowlisted photo inventory and compose
+   the validated Kitchen Sound quest. Missing credentials or provider failure fall
+   back to the deterministic seeded path.
 3. For children 3+, RummageLab can render an approved interactive
    **RummageTool**. For younger children, it gives the parent a simple co-play
    script rather than putting the child in front of a screen.
@@ -27,20 +29,23 @@ chat transcript.
    free-text analysis is implemented.
 
 The first implemented experience is **“Kitchen Sound Detectives.”** A parent can
-use the prepared kit, preview a new object-only photo locally, or type material
+use the prepared kit, preview a new object-only photo before optional analysis, or type material
 names. Every path converges on the same parent confirmation for the large empty
 plastic container, wooden utensil, soft cloth, suggested Anchorage weather
 tags, and safety checkpoint. The app then renders a validated `sound_mix`
 quest, an optional prepared parent observation, and at most one session-only
 try-next idea made only from parent-approved tags.
 
-The activity remains deliberately labeled as seeded. A selected photo is shown
-only through a browser-local object URL and is neither uploaded nor analyzed;
-typed names are normalized by a small deterministic allowlist. The slice makes
-no live weather, voice, GPT, analytics, storage, or external-service call.
-Resetting or reloading clears the in-memory state. A client-local preview can
-also show loading, automatic seeded-fallback, and retry states without a key or
-runtime planner/network request. Live adapters remain future work.
+The prepared-kit path remains deliberately labeled as seeded and needs no key.
+For live photo analysis, the parent must confirm that the image contains objects
+only. The server validates and re-encodes the transient JPEG, PNG, or WebP in
+memory to strip metadata. The multipart parser enforces an 8 MB photo limit and
+a 9 MB total request limit while reading the stream, even when `Content-Length`
+is absent or false. The server sends the sanitized image once with `store: false`
+and retains neither the upload nor provider response. Typed names still use a local deterministic
+allowlist; only parent-confirmed categories enter planning. There is no live
+weather, voice, reflection processing, analytics, authentication, or database.
+Resetting or reloading clears session state.
 
 ## Architecture
 
@@ -55,7 +60,7 @@ flowchart LR
 
   subgraph App["RummageLab web app"]
     UI["Next.js web app<br/>React + TypeScript"]
-    API["Future server adapter<br/>transient handling"]
+    API["Server-only live adapter<br/>transient photo handling"]
     PLANVAL["Experience validation +<br/>developmental-focus allowlist"]
     PII["Transient text screening<br/>no content logs"]
     OBSVAL["Observation validation"]
@@ -79,7 +84,7 @@ flowchart LR
   end
 
   C --> UI --> PLANVAL --> ENG --> A
-  API -. "future only" .-> QD
+  API --> QD
   V -. "deferred" .-> API
   T -. "deferred" .-> API
   PII -. "future only" .-> LE
@@ -94,7 +99,7 @@ See [the detailed architecture](docs/architecture.md).
 
 ## Why GPT-5.6 and Codex
 
-### Future GPT-5.6 runtime
+### GPT-5.6 runtime
 
 - Uses object photos and parent-provided context to compose a constrained,
   developmentally appropriate moment or quest.
@@ -112,10 +117,9 @@ See [the detailed architecture](docs/architecture.md).
 - **Evidence:** dated commits and [Codex decision log](docs/codex-decisions.md).
 
 For the hackathon, Codex is used materially at build time to create and verify
-the product. The current seeded path proves the same Zod validation and approved
-React renderer boundary without pretending to make a live model call. When the
-live runtime is added, GPT-5.6 will select a validated `RummageToolSpec`; the app
-will still render only approved, prebuilt React components. A teacher/parent
+the product. The live runtime may select only a validated `RummageToolSpec`; the
+app still renders only approved, prebuilt React components. The seeded path uses
+the same validation boundary without requiring credentials. A teacher/parent
 authoring studio is documented phase-two scope; even then, the learner app will
 never execute arbitrary generated code.
 
@@ -147,9 +151,19 @@ pnpm dev
 Open `http://localhost:3000` to run the complete seeded Kitchen Sound Detectives
 path. No environment file, login, API key, or external service is required.
 
-The product owner has authorized a future server-only development key and a
-transient object-only upload boundary, but this branch deliberately adds neither
-a key, SDK, upload route, outbound call, nor deployment configuration.
+Live development is optional. Put a development key only in an ignored
+`.env.local` file; never commit it or expose it with a `NEXT_PUBLIC_` name:
+
+```bash
+OPENAI_API_KEY=your-development-key
+```
+
+The live slice is deliberately pinned to `gpt-5.6`. Without `OPENAI_API_KEY`,
+the prepared seeded demo remains fully usable and live requests fail safely to
+that path.
+
+`GET /api/live-experience` reports only whether live photo analysis and the
+seeded demo are available; it never returns credential or provider details.
 
 ## Framework checks
 
@@ -159,19 +173,20 @@ pnpm typecheck
 pnpm check
 ```
 
-The combined check passes under Node 24. Thirty-eight tests cover the material,
-age-band, learning-focus and RummageTool safety contracts plus the seeded
-fixture, local material normalization and photo validation, session reducer,
-runtime request/response validation, malformed/timeout/mismatch fallbacks,
-content-free diagnostics, no-fetch seeded behavior, one-suggestion boundary,
-sound mixer, and rendered demo shell. Live API tests remain deferred because this
-slice adds no API.
+The combined check runs under Node 24. Tests cover material, age-band,
+learning-focus and RummageTool safety contracts; the seeded fixture; local and
+server photo validation; metadata stripping; session reset; strict live request
+and response validation; missing-key, malformed, timeout, and mismatch
+fallbacks; content-free diagnostics; the one-suggestion boundary; sound mixer;
+and the rendered demo shell.
 
 ## Seeded demo path
 
 1. Open the app.
-2. Use the prepared kit, take or choose an object-only local photo, or type the material
-   names. The photo path is a local preview, not live analysis.
+2. Use the prepared kit, take or choose an object-only photo, or type the
+   material names. Live photo analysis happens only after the parent checks the
+   object-only confirmation and selects **Analyze objects with GPT-5.6**; without
+   a key, the validated prepared inventory remains available.
 3. Confirm all three allowlisted materials, the Anchorage demo weather tags,
    and the adult safety checkpoint.
 4. Start the validated `sound_mix` quest and build a three-card sound trail.

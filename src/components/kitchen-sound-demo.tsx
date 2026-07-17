@@ -22,6 +22,7 @@ import {
   KITCHEN_SOUND_DEMO_LOCATION_LABEL,
   KITCHEN_SOUND_AVAILABLE_WEATHER_TAGS,
   KITCHEN_SOUND_REQUIRED_MATERIALS,
+  createKitchenSoundActivityContext,
   kitchenSoundPhotoInventory,
   kitchenSoundQuest,
   type DemoObservationTag,
@@ -38,7 +39,11 @@ import {
   validateLocalObjectPhotoDimensions,
   type MaterialIntakeSource,
 } from "../lib/demo/material-intake";
-import type { AllowedMaterialCategory } from "../lib/schemas";
+import type { AllowedMaterialCategory, PhotoInventory, QuestSpec } from "../lib/schemas";
+import {
+  ExperienceResponseSchema,
+  PhotoInventoryResponseSchema,
+} from "../lib/runtime/contracts";
 
 const materialDetails: Record<AllowedMaterialCategory, string> = {
   large_empty_plastic_container: "Large, empty, and unbreakable",
@@ -72,7 +77,7 @@ const intakeChoiceCopy: Record<
   },
   photo: {
     label: "Take or choose an object photo",
-    detail: "Local preview; no upload",
+    detail: "Optional transient GPT-5.6 analysis",
   },
   typed: {
     label: "Type what you have",
@@ -111,7 +116,7 @@ const phaseProgress: Record<KitchenSoundDemoPhase, string> = {
   complete: "Case file 4 of 4 · All done",
 };
 
-type RuntimePreviewStatus = "idle" | "loading" | "fallback";
+type RuntimePreviewStatus = "idle" | "loading" | "fallback" | "error";
 
 function StageHeader({
   eyebrow,
@@ -152,6 +157,10 @@ export function KitchenSoundDemo() {
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [runtimePreviewStatus, setRuntimePreviewStatus] =
     useState<RuntimePreviewStatus>("idle");
+  const [liveInventory, setLiveInventory] = useState<PhotoInventory | null>(null);
+  const [activeQuest, setActiveQuest] = useState<QuestSpec>(kitchenSoundQuest);
+  const [objectOnlyConsent, setObjectOnlyConsent] = useState(false);
+  const [liveSource, setLiveSource] = useState<"live_provider" | "seeded_fallback" | null>(null);
   const demoMainRef = useRef<HTMLElement>(null);
   const stageHeadingRef = useRef<HTMLHeadingElement>(null);
   const shouldFocusStageRef = useRef(false);
@@ -159,6 +168,9 @@ export function KitchenSoundDemo() {
   const photoSelectionVersionRef = useRef(0);
   const runtimeRequestVersionRef = useRef(0);
   const photoInputRef = useRef<HTMLInputElement>(null);
+  const photoFileRef = useRef<File | null>(null);
+  const stateRef = useRef(state);
+  stateRef.current = state;
 
   const typedMaterialNormalization = useMemo(
     () => normalizeKitchenSoundTypedMaterials(typedMaterialText),
@@ -171,11 +183,13 @@ export function KitchenSoundDemo() {
           suggestedLabel: item.displayLabel,
           allowedMaterialCategory: item.category,
         }))
-      : kitchenSoundPhotoInventory.suggestedItems;
+      : state.materialSource === "photo" && liveInventory
+        ? liveInventory.suggestedItems
+        : kitchenSoundPhotoInventory.suggestedItems;
 
   const materialSuggestionsReady =
     state.materialSource === "seeded_demo" ||
-    (state.materialSource === "photo" && photoPreviewUrl !== null) ||
+    (state.materialSource === "photo" && liveInventory !== null) ||
     (state.materialSource === "typed" &&
       typedMaterialNormalization.accepted.length > 0 &&
       typedMaterialNormalization.inputError === null);
@@ -224,6 +238,11 @@ export function KitchenSoundDemo() {
     setPhotoFileName("");
     setPhotoError(null);
     setRuntimePreviewStatus("idle");
+    setLiveInventory(null);
+    setActiveQuest(kitchenSoundQuest);
+    setObjectOnlyConsent(false);
+    setLiveSource(null);
+    photoFileRef.current = null;
     if (photoInputRef.current) {
       photoInputRef.current.value = "";
     }
@@ -233,11 +252,16 @@ export function KitchenSoundDemo() {
 
   function clearPhotoSelection() {
     photoSelectionVersionRef.current += 1;
+    runtimeRequestVersionRef.current += 1;
     releaseLocalPhotoPreview(photoPreviewUrlRef.current);
     photoPreviewUrlRef.current = null;
     setPhotoPreviewUrl(null);
     setPhotoFileName("");
     setPhotoError(null);
+    setLiveInventory(null);
+    setObjectOnlyConsent(false);
+    setLiveSource(null);
+    photoFileRef.current = null;
     if (photoInputRef.current) {
       photoInputRef.current.value = "";
     }
@@ -245,6 +269,7 @@ export function KitchenSoundDemo() {
   }
 
   function chooseMaterialSource(source: MaterialIntakeSource) {
+    runtimeRequestVersionRef.current += 1;
     if (state.materialSource === "photo" && source !== "photo") {
       clearPhotoSelection();
     }
@@ -256,6 +281,7 @@ export function KitchenSoundDemo() {
   }
 
   function updateTypedMaterials(value: string) {
+    runtimeRequestVersionRef.current += 1;
     const normalization = normalizeKitchenSoundTypedMaterials(value);
     setTypedMaterialText(value);
     dispatch({
@@ -272,11 +298,16 @@ export function KitchenSoundDemo() {
     const file = input.files?.[0];
     const selectionVersion = photoSelectionVersionRef.current + 1;
     photoSelectionVersionRef.current = selectionVersion;
+    runtimeRequestVersionRef.current += 1;
     releaseLocalPhotoPreview(photoPreviewUrlRef.current);
     photoPreviewUrlRef.current = null;
     setPhotoPreviewUrl(null);
     setPhotoFileName("");
     setPhotoError(null);
+    setLiveInventory(null);
+    setObjectOnlyConsent(false);
+    setLiveSource(null);
+    photoFileRef.current = null;
     dispatch({ type: "SET_MATERIAL_CANDIDATES", materials: [] });
 
     if (!file) {
@@ -343,43 +374,82 @@ export function KitchenSoundDemo() {
 
     setPhotoPreviewUrl(nextPreviewUrl);
     setPhotoFileName(file.name);
+    photoFileRef.current = file;
     setPhotoError(null);
-    dispatch({
-      type: "SET_MATERIAL_CANDIDATES",
-      materials: [...KITCHEN_SOUND_REQUIRED_MATERIALS],
-    });
     setAnnouncement(
-      "Object photo ready as a local preview. It was not uploaded or analyzed.",
+      "Object photo ready as a local preview. Confirm the object-only boundary before live analysis.",
     );
   }
 
-  function startQuest(useUnavailableProvider = false) {
+  async function analyzePhoto() {
+    const file = photoFileRef.current;
+    if (!file || !objectOnlyConsent) return;
+    const requestVersion = ++runtimeRequestVersionRef.current;
+    setRuntimePreviewStatus("loading");
+    setPhotoError(null);
+    const body = new FormData();
+    body.set("operation", "photo_inventory");
+    body.set("objectOnlyConfirmed", "true");
+    body.set("ageStage", "3-4y");
+    body.set("photo", file);
+    try {
+      const response = await fetch("/api/live-experience", { method: "POST", body });
+      const payload = PhotoInventoryResponseSchema.parse(await response.json());
+      if (runtimeRequestVersionRef.current !== requestVersion) return;
+      setLiveInventory(payload.inventory);
+      setLiveSource(payload.runtime.source === "live_provider" ? "live_provider" : "seeded_fallback");
+      dispatch({
+        type: "SET_MATERIAL_CANDIDATES",
+        materials: payload.inventory.suggestedItems.map((item) => item.allowedMaterialCategory),
+      });
+      setRuntimePreviewStatus(payload.runtime.source === "seeded_fallback" ? "fallback" : "idle");
+      setAnnouncement(payload.runtime.source === "live_provider" ? "GPT-5.6 suggested a constrained inventory. Confirm every item yourself." : "Live analysis was unavailable; the prepared inventory is ready for your confirmation.");
+    } catch {
+      if (runtimeRequestVersionRef.current !== requestVersion) return;
+      setRuntimePreviewStatus("error");
+      setPhotoError("Live analysis could not prepare a safe inventory. Retry or use the prepared kit.");
+    }
+  }
+
+  async function startQuest() {
     if (!canStart) {
       return;
     }
     const requestVersion = runtimeRequestVersionRef.current + 1;
     runtimeRequestVersionRef.current = requestVersion;
     setRuntimePreviewStatus("loading");
-    setAnnouncement("Preparing the validated seeded sound quest.");
-
-    window.setTimeout(() => {
-      if (runtimeRequestVersionRef.current !== requestVersion) {
-        return;
-      }
-      if (useUnavailableProvider) {
-        setRuntimePreviewStatus("fallback");
-        setAnnouncement(
-          "The prepared fallback is ready. No photo, typed text, or provider response was retained.",
-        );
-        return;
-      }
-
+    setAnnouncement("Preparing a validated activity from parent-confirmed context.");
+    const activityContext = createKitchenSoundActivityContext({
+      materialSource: state.materialSource,
+      confirmedMaterials: state.confirmedMaterials,
+      approvedWeatherTags: state.selectedWeatherTags,
+      parentConfirmedSafety: state.parentConfirmedSafety,
+    });
+    try {
+      const response = await fetch("/api/live-experience", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ operation: "experience_selection", fixtureId: "kitchen-sound-detectives", activityContext }),
+      });
+      const payload = ExperienceResponseSchema.parse(await response.json());
+      const current = stateRef.current;
+      const contextStillMatches =
+        current.materialSource === activityContext.materialSource &&
+        current.parentConfirmedSafety === activityContext.parentConfirmedSafety &&
+        JSON.stringify(current.confirmedMaterials) === JSON.stringify(state.confirmedMaterials) &&
+        JSON.stringify(current.selectedWeatherTags) === JSON.stringify(state.selectedWeatherTags) &&
+        current.parentApprovedWeather;
+      if (runtimeRequestVersionRef.current !== requestVersion || !contextStillMatches || payload.experience.experienceMode !== "guided_quest") return;
+      setActiveQuest(payload.experience);
+      setLiveSource(payload.runtime.source === "live_provider" ? "live_provider" : "seeded_fallback");
       setRuntimePreviewStatus("idle");
-      if (state.materialSource === "typed") {
-        setTypedMaterialText("");
-      }
-      transitionDemo({ type: "START_QUEST" });
-    }, 280);
+      if (state.materialSource === "typed") setTypedMaterialText("");
+      transitionDemo({ type: "START_QUEST", experience: payload.experience });
+    } catch {
+      if (runtimeRequestVersionRef.current !== requestVersion) return;
+      setRuntimePreviewStatus("error");
+      setAnnouncement("The activity could not be safely validated. Retry or use the prepared demo.");
+    }
   }
 
   function openPreparedFallback() {
@@ -388,7 +458,8 @@ export function KitchenSoundDemo() {
       setTypedMaterialText("");
     }
     setAnnouncement("Opening the prepared, validated fallback quest.");
-    transitionDemo({ type: "START_QUEST" });
+    setActiveQuest(kitchenSoundQuest);
+    transitionDemo({ type: "START_QUEST", experience: kitchenSoundQuest });
   }
 
   function addSound(soundLabel: string) {
@@ -420,7 +491,7 @@ export function KitchenSoundDemo() {
     !state.parentConfirmedSafety ? "the safety check" : null,
   ].filter(Boolean);
 
-  const learningFocuses = kitchenSoundQuest.developmentalFocusIds
+  const learningFocuses = activeQuest.developmentalFocusIds
     .map((id) => findLearningFocus(id))
     .filter((focus) => focus !== undefined);
 
@@ -461,12 +532,14 @@ export function KitchenSoundDemo() {
 
         <div className="seeded-banner" role="note">
           <strong>
-            {state.materialSource === "seeded_demo" ? "Seeded demo" : "Local intake"}
+            {liveSource === "live_provider" ? "Live GPT-5.6" : state.materialSource === "seeded_demo" ? "Seeded demo" : "Safe intake"}
           </strong>
           <span>
             {state.materialSource === "seeded_demo"
               ? "Prepared example—no live photo, weather, voice, or GPT analysis."
-              : "Photo and typed input stay in this browser—no upload, live analysis, storage, or GPT call."}
+              : state.materialSource === "photo"
+                ? "A confirmed object-only photo may be transiently re-encoded and analyzed; it is not stored."
+                : "Typed names use the local allowlist; only confirmed categories may reach planning."}
           </span>
         </div>
 
@@ -580,10 +653,10 @@ export function KitchenSoundDemo() {
                       </div>
                     )}
                     <div className="photo-caption">
-                      <span className="specimen-label">Local object photo</span>
+                      <span className="specimen-label">Object-only photo</span>
                       <span>
                         {photoFileName
-                          ? `${photoFileName} is previewed only on this device.`
+                          ? `${photoFileName} is ready for your review.`
                           : "Choose a JPEG, PNG, or WebP under 8 MB."}
                       </span>
                     </div>
@@ -599,23 +672,23 @@ export function KitchenSoundDemo() {
                       />
                     </label>
                     {photoPreviewUrl ? (
-                      <button
-                        className="text-button photo-remove"
-                        onClick={() => {
-                          clearPhotoSelection();
-                          setAnnouncement("Local photo removed and material confirmations cleared.");
-                        }}
-                        type="button"
-                      >
-                        Remove local photo
-                      </button>
+                      <>
+                        <label className="approval-row">
+                          <input checked={objectOnlyConsent} onChange={(event) => { const checked = event.currentTarget.checked; setObjectOnlyConsent(checked); if (!checked) { runtimeRequestVersionRef.current += 1; setLiveInventory(null); setLiveSource(null); dispatch({ type: "SET_MATERIAL_CANDIDATES", materials: [] }); } }} type="checkbox" />
+                          <span className="check-copy">I confirm this photo shows objects only<span className="check-detail">No people, faces, mail, labels, screens, or identifying details.</span></span>
+                        </label>
+                        <div className="button-row">
+                          <button className="primary-button" disabled={!objectOnlyConsent || runtimePreviewStatus === "loading"} onClick={analyzePhoto} type="button">Analyze objects with GPT-5.6</button>
+                          <button className="text-button photo-remove" onClick={() => { clearPhotoSelection(); setAnnouncement("Photo removed and confirmations cleared."); }} type="button">Remove photo</button>
+                        </div>
+                      </>
                     ) : null}
                     <p className="privacy-note" id="photo-boundary">
                       Objects only: no people, faces, mail, labels, or screens.
-                      This shell never uploads or analyzes the file. It creates
-                      a temporary browser preview and revokes that preview on
-                      replace, remove, reset, or page exit. Metadata stripping
-                      is required before any future live upload.
+                      Live analysis is optional. After your confirmation, the server
+                      decodes and freshly re-encodes the photo to remove metadata,
+                      sends it once with <code>store: false</code>, and does not save
+                      the upload or provider response. Reset or page exit clears the preview.
                     </p>
                     {photoError ? (
                       <p className="input-error" role="alert">
@@ -706,7 +779,9 @@ export function KitchenSoundDemo() {
                   {state.materialSource === "seeded_demo"
                     ? "These three suggestions came from a prepared fixture. Confirm what is present and safe before any activity context is built."
                     : state.materialSource === "photo"
-                      ? "The photo stays local. This shell shows the prepared sound-kit categories; confirm only what is really in front of you."
+                      ? liveSource === "live_provider"
+                        ? "GPT-5.6 suggested these constrained categories. It cannot determine safety; confirm only what is really present and safe."
+                        : "Live analysis was unavailable, so these are prepared suggestions. Confirm only what is really present and safe."
                       : "Only exact matches from the small demo allowlist appear here. Confirm what is present and safe before it enters context."}
                 </p>
 
@@ -868,32 +943,22 @@ export function KitchenSoundDemo() {
                       >
                         Make our sound quest
                       </button>
-                      <button
-                        className="text-button"
-                        disabled={!canStart}
-                        onClick={() => startQuest(true)}
-                        type="button"
-                      >
-                        Preview fallback and retry
-                      </button>
                     </>
                   ) : null}
                   {runtimePreviewStatus === "loading" ? (
                     <p className="gate-note" role="status">
-                      Preparing the validated seeded sound quest. No network request is
-                      being made.
+                      Preparing a strictly validated activity. Raw photo and typed text are not included in this planning request.
                     </p>
                   ) : null}
-                  {runtimePreviewStatus === "fallback" ? (
+                  {runtimePreviewStatus === "fallback" || runtimePreviewStatus === "error" ? (
                     <div className="runtime-fallback" role="alert">
                       <p>
-                        The planner was unavailable, so a prepared safe fallback is
-                        ready. No photo, typed text, or provider response is shown or
-                        logged.
+                        Live mode was unavailable or rejected, so the prepared safe path remains available. Raw content is not shown or logged.
                       </p>
                       <div className="button-row">
                         <button
                           className="primary-button"
+                          disabled={!canStart}
                           onClick={openPreparedFallback}
                           type="button"
                         >
@@ -901,10 +966,10 @@ export function KitchenSoundDemo() {
                         </button>
                         <button
                           className="secondary-button"
-                          onClick={() => startQuest()}
+                          onClick={() => void startQuest()}
                           type="button"
                         >
-                          Retry seeded planner
+                          Retry live planner
                         </button>
                       </div>
                     </div>
@@ -921,7 +986,7 @@ export function KitchenSoundDemo() {
               deck="The real objects make the sounds. This approved screen only guides prediction, noticing, pattern play, and turns."
               eyebrow={phaseProgress[state.phase]}
               headingRef={stageHeadingRef}
-              title={kitchenSoundQuest.title}
+              title={activeQuest.title}
             />
 
             <div className="quest-layout">
@@ -935,7 +1000,7 @@ export function KitchenSoundDemo() {
                   </p>
 
                   <ol className="quest-steps">
-                    {kitchenSoundQuest.steps.map((step) => (
+                    {activeQuest.steps.map((step) => (
                       <li className="quest-step" key={`${step.minute}-${step.instruction}`}>
                         <div>
                           <span className="step-minute">Minute {step.minute}</span>
@@ -955,7 +1020,7 @@ export function KitchenSoundDemo() {
 
                   <p className="safety-callout">
                     <strong>Grown-up safety note:</strong>{" "}
-                    {kitchenSoundQuest.adultSafetyNote}
+                    {activeQuest.adultSafetyNote}
                   </p>
                 </article>
               </div>
@@ -964,7 +1029,7 @@ export function KitchenSoundDemo() {
                 <SoundMixTool
                   onAdd={addSound}
                   onClear={() => setSoundTrail([])}
-                  spec={kitchenSoundQuest.tool}
+                  spec={activeQuest.tool.kind === "sound_mix" ? activeQuest.tool : kitchenSoundQuest.tool}
                   trail={soundTrail}
                 />
 
@@ -1210,8 +1275,8 @@ export function KitchenSoundDemo() {
       </main>
 
       <footer className="privacy-footer">
-        Seeded activity · optional local intake · no login · no API key · no
-        external service or model calls · no analytics · no browser storage.
+        Seeded path needs no key · no login · no analytics · no browser storage ·
+        live mode uses transient server processing with no app storage.
         Reset or reload starts over.
       </footer>
     </div>

@@ -1,8 +1,9 @@
-# Seeded demo script — target 2 minutes 30 seconds
+# Live-or-seeded demo script — target 2 minutes 30 seconds
 
-The local app implements a seeded activity with three material-intake choices.
-Present it explicitly: a new photo is previewed only in the browser and is not
-analyzed; there is no live weather, voice, or GPT analysis in this slice.
+The app implements three material-intake choices and an optional live GPT-5.6
+path. Present the mode honestly: a selected photo is first a browser preview and
+is uploaded only after the parent confirms it contains objects only and chooses
+analysis. Live weather, voice, and reflection processing remain deferred.
 
 ## 0:00–0:15 — Promise
 
@@ -13,8 +14,10 @@ adventure—without turning curiosity into homework.”
 
 Take or choose an object-only photo of the Kitchen Sound Detectives kit: a large empty
 plastic container, a wooden utensil, and a folded dish towel. Point out that the
-image is a local preview and has not been uploaded or analyzed. Confirm the
-three exact prepared categories, review **Anchorage, Alaska** as a public demo
+image is only a local preview until the parent checks the object-only boundary.
+Choose **Analyze objects with GPT-5.6**, then point out which constrained
+suggestions came from live analysis and confirm what is actually present and
+safe. Review **Anchorage, Alaska** as a public demo
 preset rather than a family location, approve the broad weather tags, and check
 the adult safety statement. If file selection is unreliable during recording,
 use the clearly labeled prepared kit fallback instead.
@@ -36,25 +39,28 @@ not used to make the suggestion.
 
 ## 2:00–2:30 — Technical proof
 
-Show the architecture or code briefly. State exactly for this seeded build:
+Show the architecture or code briefly. State exactly for this build:
 
-- The prepared inventory, quest, tool, observation, and next-activity context
-  use the same Zod validation boundary planned for live structured output.
+- The server decodes and re-encodes a confirmed object-only photo in memory,
+  sends the sanitized image once with `store: false`, and does not persist the
+  upload or provider response.
+- GPT-5.6 returns a strict structured inventory and quest. Zod and contextual
+  checks reject unapproved materials, focus IDs, ages, times, and tool shapes.
 - RummageLab renders only the approved `sound_mix` React component; it never
   executes generated code.
-- This run made no GPT or other external network call. GPT-5.6 live selection is
-  the next integration step, not something this screen simulates.
+- If the development key or provider is unavailable, the same screen opens the
+  prepared Zod-validated path and labels it as fallback rather than live output.
 - Codex was used at build time to create and review the UI, schemas, tests, and
   documentation; it is not invoked by the learner runtime. Show the core session
   ID in the README before submission.
 
 ## Seeded reliability path
 
-The current primary demo is the seeded Kitchen Sound Detectives photo fixture
+The no-key reliability path is the seeded Kitchen Sound Detectives photo fixture
 and activity. Never present it as live analysis: the app keeps a `Seeded demo`
-label visible and uses the same validation boundary planned for live structured
-output. The Anchorage weather tags are also prepared and still require parent
-approval.
+or prepared-fallback label visible and uses the same validation boundary as live
+structured output. The Anchorage weather tags are also prepared and still
+require parent approval.
 
 The typed-material path is a second honest fallback: its deterministic alias
 table shows accepted and excluded names, then reaches the same parent

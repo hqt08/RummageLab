@@ -126,7 +126,7 @@ function failureCode(error: unknown): RuntimeFailureCode {
   return "provider_unexpected_failure";
 }
 
-function validateExperienceForContext(
+export function validateExperienceForContext(
   input: unknown,
   context: ActivityContext,
 ): ExperienceSpec {
@@ -155,6 +155,27 @@ function validateExperienceForContext(
   }
 
   return experience;
+}
+
+export function validateLivePhotoInventory(input: unknown) {
+  const inventory = PhotoInventorySchema.parse(input);
+  const categories = inventory.suggestedItems.map(
+    (item) => item.allowedMaterialCategory,
+  );
+  if (
+    inventory.imageMode !== "live" ||
+    new Set(categories).size !== categories.length
+  ) {
+    throw new RuntimeProviderFailure("provider_context_mismatch");
+  }
+  return inventory;
+}
+
+export function runtimeDiagnostic(
+  operation: RuntimeOperation,
+  error: unknown,
+) {
+  return diagnostic(operation, failureCode(error));
 }
 
 export async function resolvePhotoInventory(
