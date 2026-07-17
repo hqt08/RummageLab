@@ -53,6 +53,13 @@ approve the selection before continuing. Only that approved tag set enters
 activity planning; the model never receives the city, coordinates, or provider
 payload. Do not request precise GPS location.
 
+The implemented seeded slice keeps that city label in React memory only and
+never copies it into `ActivityContext`. It preselects the clearly prepared
+`rainy` and `cold` chips, exposes all eight normalized manual choices, limits
+the final set to four, and invalidates approval whenever a chip changes. There
+is no lookup or provider request in this slice; reset or reload restores the
+Anchorage label and prepared tags.
+
 ### Provider recommendation and deterministic mapping
 
 Open-Meteo is the leading prototype choice because it combines global city

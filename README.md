@@ -2,7 +2,7 @@
 
 > Turn the things around you into moments of discovery for ages 0–6.
 
-**Status:** Planning and scaffold · **Track:** Education
+**Status:** Seeded demo implemented locally · **Track:** Education
 
 RummageLab helps a parent turn a few ordinary objects and a child’s curiosity
 into a developmentally appropriate moment of discovery. Every activity ends with
@@ -25,11 +25,16 @@ chat transcript.
    system derives an editable, parent-owned observation and uses only approved
    next-activity tags to suggest what to try next.
 
-The first planned demonstrable experience is **“Kitchen Sound Detectives”**:
-a parent photographs two empty plastic containers, a wooden spoon or silicone
-spatula, and a dish towel. After confirming the app’s safe-item suggestions,
-they and their 3-year-old explore loud/quiet, fast/slow, and simple sound
-patterns. No learner-facing experience has been implemented yet.
+The first implemented experience is the seeded **“Kitchen Sound Detectives”**
+golden path. A parent reviews an object-only local demo photo, confirms two
+empty plastic containers, a wooden spoon, a folded dish towel, the suggested
+Anchorage weather tags, and the safety checkpoint. The app then renders a
+validated `sound_mix` quest, an optional prepared parent observation, and at
+most one session-only try-next idea made only from parent-approved tags.
+
+This slice is deliberately labeled as a prepared demo. It makes no live photo,
+weather, voice, GPT, analytics, storage, or external-service call. Resetting or
+reloading clears the in-memory state. Live adapters remain future work.
 
 ## Architecture
 
@@ -80,7 +85,7 @@ See [the detailed architecture](docs/architecture.md).
 
 ## Why GPT-5.6 and Codex
 
-### GPT-5.6 at runtime
+### Planned GPT-5.6 runtime
 
 - Uses object photos and parent-provided context to compose a constrained,
   developmentally appropriate moment or quest.
@@ -98,8 +103,10 @@ See [the detailed architecture](docs/architecture.md).
 - **Evidence:** dated commits and [Codex decision log](docs/codex-decisions.md).
 
 For the hackathon, Codex is used materially at build time to create and verify
-the product. At runtime, GPT-5.6 selects a validated `RummageToolSpec` and the
-app renders it with approved, prebuilt React components. A teacher/parent
+the product. The current seeded path proves the same Zod validation and approved
+React renderer boundary without pretending to make a live model call. When the
+live runtime is added, GPT-5.6 will select a validated `RummageToolSpec`; the app
+will still render only approved, prebuilt React components. A teacher/parent
 authoring studio is documented phase-two scope; even then, the learner app will
 never execute arbitrary generated code.
 
@@ -125,14 +132,14 @@ Node 24.
 ```bash
 corepack enable # omit if pnpm 9.15.9 is already installed
 pnpm install --frozen-lockfile
-cp .env.example .env.local
-pnpm dev # starts the intentional placeholder route
+pnpm dev
 ```
 
-Open `http://localhost:3000` to verify the framework is wired correctly. It will
-show only a scaffold placeholder until implementation is explicitly approved.
+Open `http://localhost:3000` to run the complete seeded Kitchen Sound Detectives
+path. No environment file, login, API key, or external service is required.
 
-When model integration starts, set `OPENAI_API_KEY` and keep it server-side.
+When live model integration starts, copy `.env.example` to `.env.local`, set
+`OPENAI_API_KEY`, and keep it server-side.
 See [`.env.example`](.env.example).
 
 ## Framework checks
@@ -143,21 +150,24 @@ pnpm typecheck
 pnpm check
 ```
 
-The combined scaffold check currently passes under Node 24. Initial contract
-tests cover the material, age-band, standards, and RummageTool safety boundaries.
-UI/API tests and an automated smoke-test script remain intentionally deferred
-until the first behavior slice is approved.
+The combined check passes under Node 24. Tests cover the material, age-band,
+learning-focus and RummageTool safety contracts plus the seeded fixture,
+session reducer, one-suggestion boundary, sound mixer, and rendered demo shell.
+Live API tests remain deferred because this slice adds no API.
 
-## Planned demo path
+## Seeded demo path
 
 1. Open the app.
-2. Select the seeded **Kitchen Sound Detectives** activity.
-3. Co-play the sound, rhythm, and turn-taking prompts with a 3-year-old.
-4. Review the parent-safe activity constraints and parent-approved observation.
+2. Review the clearly labeled object-only prepared photo.
+3. Confirm all three allowlisted materials, the Anchorage demo weather tags,
+   and the adult safety checkpoint.
+4. Start the validated `sound_mix` quest and build a three-card sound trail.
+5. Skip reflection, or review and edit the prepared parent observation.
+6. Approve the allowlisted tags to create exactly one session-only try-next
+   idea, then reset or reload to clear the demo.
 
-Before implementation, turn this into an executable acceptance test. Before
-submission, add the public URL, demo credentials if applicable, and the final
-under-three-minute demo video. Use the
+Before submission, add the public URL and final under-three-minute demo video.
+Use the
 [submission checklist](docs/submission-checklist.md) rather than relying on
 memory.
 
