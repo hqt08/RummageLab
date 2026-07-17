@@ -5,13 +5,14 @@
 - Public source repository: `https://github.com/hqt08/RummageLab`.
 - Primary branch: `main`; it remains the production and integration branch.
 - The reviewed scaffold baseline is committed on `main` and synchronized with
-  `origin/main` at `aab2556`.
+  `origin/main`; the first seeded feature PR is merged at `041cf34`.
 - Hackathon commit identity: repository-local
   `hqt08 <1230758+hqt08@users.noreply.github.com>`.
 - Public app: GitHub stores the source; Vercel is the confirmed Next.js host.
 - Local execution remains the demonstration fallback.
-- The first seeded feature slice is developed on the short-lived local branch
-  `feat/kitchen-sound-demo`. No feature branch has been pushed or deployed.
+- Pull request #1 merged the seeded Kitchen Sound feature branch. The next
+  focused slice, `feat/material-intake-shell`, adds local photo and typed intake
+  without live services or persistence.
 
 ## Publish-readiness gate
 
@@ -48,16 +49,21 @@ existing rights.
 
 ## Worktree recommendation
 
-With the reviewed scaffold baseline now on `main`, use Codex-managed worktrees
-selectively for independent slices that benefit from parallel work. A normal
-short-lived branch remains appropriate when the slice rewrites shared UI
-hotspots and needs one integrated local browser pass.
+Use one named branch and one Codex task per worktree. The orchestration task may
+sequence work and review status, but implementation belongs in a RummageLab-
+scoped task/worktree. The manually created `feat/material-intake-shell`
+worktree is the current exception and should be removed after its PR merges;
+subsequent slices should use Codex-managed project worktrees.
+
+Parallelize only independent slices. A normal short-lived local branch remains
+appropriate when a user explicitly chooses local execution for work that
+rewrites shared UI hotspots and needs one integrated browser pass.
 
 Good candidates:
 
 - `feat/photo-inventory`
 - `feat/weather-adapter`
-- `feat/kitchen-sound-demo`
+- `feat/material-intake-shell`
 - `test/safety-contracts`
 - `docs/submission`
 

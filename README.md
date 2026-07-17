@@ -2,7 +2,7 @@
 
 > Turn the things around you into moments of discovery for ages 0–6.
 
-**Status:** Seeded demo implemented locally · **Track:** Education
+**Status:** Seeded demo plus local material intake implemented · **Track:** Education
 
 RummageLab helps a parent turn a few ordinary objects and a child’s curiosity
 into a developmentally appropriate moment of discovery. Every activity ends with
@@ -25,16 +25,20 @@ chat transcript.
    system derives an editable, parent-owned observation and uses only approved
    next-activity tags to suggest what to try next.
 
-The first implemented experience is the seeded **“Kitchen Sound Detectives”**
-golden path. A parent reviews an object-only local demo photo, confirms two
-empty plastic containers, a wooden spoon, a folded dish towel, the suggested
-Anchorage weather tags, and the safety checkpoint. The app then renders a
-validated `sound_mix` quest, an optional prepared parent observation, and at
-most one session-only try-next idea made only from parent-approved tags.
+The first implemented experience is **“Kitchen Sound Detectives.”** A parent can
+use the prepared kit, preview a new object-only photo locally, or type material
+names. Every path converges on the same parent confirmation for the large empty
+plastic container, wooden utensil, soft cloth, suggested Anchorage weather
+tags, and safety checkpoint. The app then renders a validated `sound_mix`
+quest, an optional prepared parent observation, and at most one session-only
+try-next idea made only from parent-approved tags.
 
-This slice is deliberately labeled as a prepared demo. It makes no live photo,
-weather, voice, GPT, analytics, storage, or external-service call. Resetting or
-reloading clears the in-memory state. Live adapters remain future work.
+The activity remains deliberately labeled as seeded. A selected photo is shown
+only through a browser-local object URL and is neither uploaded nor analyzed;
+typed names are normalized by a small deterministic allowlist. The slice makes
+no live weather, voice, GPT, analytics, storage, or external-service call.
+Resetting or reloading clears the in-memory state. Live adapters remain future
+work.
 
 ## Architecture
 
@@ -150,15 +154,17 @@ pnpm typecheck
 pnpm check
 ```
 
-The combined check passes under Node 24. Tests cover the material, age-band,
-learning-focus and RummageTool safety contracts plus the seeded fixture,
-session reducer, one-suggestion boundary, sound mixer, and rendered demo shell.
-Live API tests remain deferred because this slice adds no API.
+The combined check passes under Node 24. Thirty-three tests cover the material,
+age-band, learning-focus and RummageTool safety contracts plus the seeded
+fixture, local material normalization and photo validation, session reducer,
+one-suggestion boundary, sound mixer, and rendered demo shell. Live API tests
+remain deferred because this slice adds no API.
 
 ## Seeded demo path
 
 1. Open the app.
-2. Review the clearly labeled object-only prepared photo.
+2. Use the prepared kit, take or choose an object-only local photo, or type the material
+   names. The photo path is a local preview, not live analysis.
 3. Confirm all three allowlisted materials, the Anchorage demo weather tags,
    and the adult safety checkpoint.
 4. Start the validated `sound_mix` quest and build a three-card sound trail.
@@ -179,6 +185,7 @@ memory.
 - [Parent observations and adaptive suggestions](docs/observation-model.md)
 - [Demo script](docs/demo-script.md)
 - [Photo-to-activity demo flow](docs/photo-to-activity-demo.md)
+- [Material-intake QA record](docs/material-intake-qa.md)
 - [Activity-context contract](docs/activity-context.md)
 - [Codex decision log](docs/codex-decisions.md)
 - [Submission checklist](docs/submission-checklist.md)

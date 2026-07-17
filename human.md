@@ -57,8 +57,13 @@ unchecked item rather than silently assuming an answer.
       `hqt08/RummageLab`. GitHub created the first commit with the standard
       Apache-2.0 `LICENSE`; its author uses the verified no-reply address, the
       license matches the local copy exactly, and local `main` now tracks
-      `origin/main`. No scaffold commit has been pushed yet.
+      `origin/main`. The reviewed scaffold and seeded Kitchen Sound demo are
+      published; pull request #1 is merged at `041cf34`.
 - [x] **In-product Codex Studio:** Confirmed as a documented phase-two feature,
       not part of the hackathon demo. For the hackathon, Codex remains a
       build-time collaborator; GPT-5.6 selects a validated `RummageToolSpec`
       that the app renders with approved, prebuilt components.
+- [ ] **Live OpenAI runtime authorization:** Before adding a networked photo or
+      reflection adapter, approve a server-only development API key and the
+      transient object-only upload boundary. Production credentials and public
+      deployment remain separate approvals.
