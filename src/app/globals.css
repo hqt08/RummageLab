@@ -246,6 +246,127 @@ textarea:focus-visible,
   font-weight: 750;
 }
 
+.intake-desk {
+  position: relative;
+  display: grid;
+  gap: 1rem;
+  margin: 1.25rem 0 1.5rem;
+  padding: clamp(1rem, 4vw, 1.35rem);
+  overflow: hidden;
+  color: var(--paper-light);
+  background:
+    linear-gradient(110deg, transparent 0 73%, rgba(225, 172, 61, 0.16) 73% 74%, transparent 74%),
+    var(--ink);
+  border: 1.5px solid var(--ink);
+  box-shadow: 5px 5px 0 var(--mustard);
+}
+
+.intake-desk::after {
+  position: absolute;
+  right: -1.5rem;
+  bottom: -2.4rem;
+  width: 8rem;
+  height: 8rem;
+  border: 1px dashed rgba(255, 250, 240, 0.28);
+  border-radius: 50%;
+  content: "";
+  pointer-events: none;
+}
+
+.intake-desk .panel-kicker {
+  color: #ffd477;
+}
+
+.intake-title {
+  margin: 0;
+  font-family: var(--display);
+  font-size: clamp(1.65rem, 6vw, 2.45rem);
+  letter-spacing: -0.045em;
+  line-height: 1;
+}
+
+.intake-copy {
+  max-width: 33rem;
+  margin: 0.55rem 0 0;
+  color: rgba(255, 250, 240, 0.76);
+  font-size: 0.82rem;
+  line-height: 1.55;
+}
+
+.intake-options {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.intake-option {
+  position: relative;
+  cursor: pointer;
+}
+
+.intake-option input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+}
+
+.intake-option > span {
+  display: grid;
+  min-height: 68px;
+  gap: 0.2rem;
+  align-content: center;
+  padding: 0.65rem 0.75rem 0.65rem 2.8rem;
+  color: var(--ink);
+  background: var(--paper-light);
+  border: 2px solid var(--paper-light);
+  box-shadow: 3px 3px 0 rgba(225, 172, 61, 0.72);
+}
+
+.intake-option > span::before {
+  position: absolute;
+  left: 0.8rem;
+  display: grid;
+  width: 1.25rem;
+  height: 1.25rem;
+  place-items: center;
+  border: 2px solid var(--teal);
+  border-radius: 50%;
+  content: "";
+}
+
+.intake-option strong {
+  font-size: 0.77rem;
+  line-height: 1.25;
+}
+
+.intake-option small {
+  color: var(--ink-soft);
+  font-family: var(--mono);
+  font-size: 0.61rem;
+  line-height: 1.35;
+  text-transform: uppercase;
+}
+
+.intake-option input:checked + span {
+  background: #dcebe7;
+  border-color: var(--mustard);
+  transform: translate(-2px, -2px);
+  box-shadow: 6px 6px 0 var(--mustard);
+}
+
+.intake-option input:checked + span::before {
+  background: var(--teal);
+  box-shadow: inset 0 0 0 3px #dcebe7;
+}
+
+.intake-option input:focus-visible + span {
+  outline: 3px solid #ffd477;
+  outline-offset: 4px;
+}
+
 .kit-grid,
 .quest-layout,
 .observation-layout {
@@ -310,6 +431,169 @@ textarea:focus-visible,
   color: var(--ink-soft);
   font-size: 0.78rem;
   line-height: 1.5;
+}
+
+.local-photo-intake,
+.typed-material-intake {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.photo-drop-placeholder {
+  display: grid;
+  min-height: 15rem;
+  place-content: center;
+  gap: 0.25rem;
+  padding: 1.5rem;
+  text-align: center;
+  background:
+    linear-gradient(90deg, var(--line) 1px, transparent 1px) 0 0 / 28px 28px,
+    linear-gradient(var(--line) 1px, transparent 1px) 0 0 / 28px 28px,
+    rgba(184, 212, 209, 0.28);
+  border: 2px dashed var(--teal);
+}
+
+.photo-drop-placeholder span {
+  width: fit-content;
+  margin: 0 auto 0.45rem;
+  padding: 0.2rem 0.38rem;
+  color: var(--paper-light);
+  background: var(--tomato);
+  font-family: var(--mono);
+  font-size: 0.65rem;
+  font-weight: 800;
+}
+
+.photo-drop-placeholder strong {
+  font-family: var(--display);
+  font-size: 1.8rem;
+}
+
+.photo-drop-placeholder small {
+  max-width: 15rem;
+  color: var(--ink-soft);
+  font-size: 0.74rem;
+  line-height: 1.45;
+}
+
+.file-field {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.75rem;
+  background: rgba(225, 172, 61, 0.18);
+  border: 1px dashed var(--ink);
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.file-field input {
+  width: 100%;
+  color: var(--ink-soft);
+  font-size: 0.72rem;
+}
+
+.file-field input::file-selector-button {
+  min-height: 44px;
+  margin-right: 0.65rem;
+  padding: 0.5rem 0.65rem;
+  color: var(--paper-light);
+  background: var(--teal);
+  border: 1.5px solid var(--ink);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.photo-remove {
+  justify-self: start;
+}
+
+.typed-material-field {
+  display: grid;
+  gap: 0.45rem;
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.typed-material-field textarea {
+  width: 100%;
+  min-height: 9.5rem;
+  resize: vertical;
+  padding: 0.8rem;
+  color: var(--ink);
+  background:
+    repeating-linear-gradient(
+      0deg,
+      #fffdf6 0,
+      #fffdf6 30px,
+      rgba(40, 93, 87, 0.1) 31px,
+      #fffdf6 32px
+    );
+  border: 1.5px solid var(--ink);
+  border-radius: 0;
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  line-height: 2rem;
+}
+
+.normalization-group {
+  padding-top: 0.7rem;
+  border-top: 1px dashed var(--ink-soft);
+}
+
+.normalization-group h3 {
+  margin: 0 0 0.45rem;
+  font-family: var(--display);
+  font-size: 1rem;
+}
+
+.normalization-group p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.76rem;
+  line-height: 1.5;
+}
+
+.normalization-list {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.normalization-list li {
+  padding: 0.45rem 0.55rem;
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+.accepted-list li {
+  background: rgba(184, 212, 209, 0.48);
+  border-left: 4px solid var(--teal);
+}
+
+.excluded-list li,
+.input-error {
+  background: rgba(182, 67, 45, 0.09);
+  border-left: 4px solid var(--tomato);
+}
+
+.input-error,
+.empty-inventory {
+  margin: 0;
+  padding: 0.65rem 0.75rem;
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+.missing-group {
+  color: var(--tomato);
+}
+
+.empty-inventory {
+  background: rgba(225, 172, 61, 0.13);
+  border-left: 4px solid var(--mustard);
 }
 
 .specimen-label,
@@ -993,6 +1277,25 @@ button:disabled {
 
   .demo-main {
     padding-top: 2.4rem;
+  }
+
+  .intake-desk {
+    grid-template-columns: minmax(15rem, 0.72fr) minmax(26rem, 1.28fr);
+    gap: 1.3rem;
+    align-items: center;
+  }
+
+  .intake-options {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .intake-option > span {
+    min-height: 92px;
+    padding: 2.25rem 0.65rem 0.6rem;
+  }
+
+  .intake-option > span::before {
+    top: 0.65rem;
   }
 
   .kit-grid,

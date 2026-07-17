@@ -105,6 +105,7 @@ assertExactlyRequiredMaterials(
 );
 
 export type KitchenSoundContextSelection = {
+  materialSource?: ActivityContext["materialSource"];
   confirmedMaterials: readonly AllowedMaterialCategory[];
   approvedWeatherTags: readonly DemoWeatherTag[];
   parentConfirmedSafety: boolean;
@@ -120,7 +121,7 @@ export function createKitchenSoundActivityContext(
 
   return ActivityContextSchema.parse({
     ageStage: "3-4y",
-    materialSource: "seeded_demo",
+    materialSource: selection.materialSource ?? "seeded_demo",
     confirmedMaterials: selection.confirmedMaterials.map(
       (allowedMaterialCategory) => ({
         allowedMaterialCategory,

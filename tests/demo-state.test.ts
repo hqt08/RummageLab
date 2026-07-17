@@ -80,6 +80,63 @@ describe("Kitchen Sound Detectives confirmation gates", () => {
     expect(changed.parentApprovedWeather).toBe(false);
     expect(canStartKitchenSoundQuest(changed)).toBe(false);
   });
+
+  it("uses the selected intake source and clears kit approval when that source changes", () => {
+    const sourceChanged = kitchenSoundDemoReducer(readyKitState(), {
+      type: "SET_MATERIAL_SOURCE",
+      source: "typed",
+    });
+
+    expect(sourceChanged.materialSource).toBe("typed");
+    expect(sourceChanged.confirmedMaterials).toEqual([]);
+    expect(sourceChanged.parentConfirmedSafety).toBe(false);
+    expect(sourceChanged.parentApprovedWeather).toBe(true);
+    expect(canStartKitchenSoundQuest(sourceChanged)).toBe(false);
+
+    const typedReady = reduce(
+      sourceChanged,
+      {
+        type: "SET_MATERIAL_CANDIDATES",
+        materials: [...KITCHEN_SOUND_REQUIRED_MATERIALS],
+      },
+      ...KITCHEN_SOUND_REQUIRED_MATERIALS.map(
+        (material): KitchenSoundDemoAction => ({
+          type: "TOGGLE_MATERIAL",
+          material,
+        }),
+      ),
+      { type: "SET_SAFETY_CONFIRMED", confirmed: true },
+    );
+    const started = kitchenSoundDemoReducer(typedReady, {
+      type: "START_QUEST",
+    });
+
+    expect(started.activityContext?.materialSource).toBe("typed");
+  });
+
+  it("cannot start photo or typed provenance without a current intake result", () => {
+    for (const source of ["photo", "typed"] as const) {
+      const sourceChanged = kitchenSoundDemoReducer(readyKitState(), {
+        type: "SET_MATERIAL_SOURCE",
+        source,
+      });
+      const attempted = reduce(
+        sourceChanged,
+        ...KITCHEN_SOUND_REQUIRED_MATERIALS.map(
+          (material): KitchenSoundDemoAction => ({
+            type: "TOGGLE_MATERIAL",
+            material,
+          }),
+        ),
+        { type: "SET_SAFETY_CONFIRMED", confirmed: true },
+        { type: "START_QUEST" },
+      );
+
+      expect(attempted.phase).toBe("kit_review");
+      expect(attempted.confirmedMaterials).toEqual([]);
+      expect(attempted.activityContext).toBeNull();
+    }
+  });
 });
 
 describe("Kitchen Sound Detectives reflection and next-step state", () => {

@@ -3,15 +3,17 @@
 ## Product and testing
 
 - [ ] Public demo URL works in a fresh browser.
-- [ ] Seeded demo works without a model API key.
-- [ ] Judge instructions and any test credentials are in the README.
-- [ ] README identifies the seeded sample data and gives testing instructions.
-- [x] `pnpm check` passes for the scaffold baseline; rerun before submission.
-- [ ] A fallback path exists for a model/API outage.
+- [x] Seeded demo works without a model API key.
+- [x] Judge instructions are in the README; the seeded path needs no test credentials.
+- [x] README identifies the seeded sample data and gives testing instructions.
+- [x] Lint, typecheck, 33 tests, and production build pass under Node 24; rerun
+      before submission.
+- [ ] A seeded fallback exists, but verify the automatic model/API failure route
+      after live integration is connected.
 
 ## Required evidence
 
-- [ ] README explains the product, technical architecture, GPT-5.6 usage, Codex
+- [x] README explains the product, technical architecture, GPT-5.6 usage, Codex
       contribution, and human decisions.
 - [ ] Core Codex `/feedback` Session ID is recorded in the README.
 - [ ] Dated commits and `docs/codex-decisions.md` distinguish work created during

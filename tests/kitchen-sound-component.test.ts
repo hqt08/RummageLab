@@ -11,6 +11,11 @@ describe("KitchenSoundDemo", () => {
     expect(html).toContain("Seeded demo");
     expect(html).toContain("no live photo, weather, voice, or GPT analysis");
     expect(html).toContain("Kitchen Sound Detectives");
+    expect(html).toContain("Rummage your way in");
+    expect(html).toContain("Use the prepared kit");
+    expect(html).toContain("Take or choose an object photo");
+    expect(html).toContain("Type what you have");
+    expect(html).toContain('type="radio"');
     expect(html).toContain("Object-only demo photo");
     expect(html).toContain("Anchorage, Alaska");
     expect(html).toContain("Public demo city label");

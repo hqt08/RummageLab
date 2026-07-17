@@ -15,6 +15,7 @@ import {
   type DemoWeatherTag,
   type KitchenSoundNextSuggestion,
 } from "./kitchen-sound-detectives";
+import type { MaterialIntakeSource } from "./material-intake";
 
 export type KitchenSoundDemoPhase =
   | "kit_review"
@@ -32,6 +33,8 @@ export type ObservationDraft = {
 
 export type KitchenSoundDemoState = {
   phase: KitchenSoundDemoPhase;
+  materialSource: MaterialIntakeSource;
+  intakeCandidateMaterials: AllowedMaterialCategory[];
   confirmedMaterials: AllowedMaterialCategory[];
   selectedWeatherTags: DemoWeatherTag[];
   parentApprovedWeather: boolean;
@@ -45,6 +48,15 @@ export type KitchenSoundDemoState = {
 };
 
 export type KitchenSoundDemoAction =
+  | {
+      type: "SET_MATERIAL_SOURCE";
+      source: MaterialIntakeSource;
+    }
+  | {
+      type: "SET_MATERIAL_CANDIDATES";
+      materials: AllowedMaterialCategory[];
+    }
+  | { type: "CLEAR_MATERIAL_CONFIRMATION" }
   | {
       type: "TOGGLE_MATERIAL";
       material: AllowedMaterialCategory;
@@ -83,6 +95,8 @@ export type KitchenSoundDemoAction =
 export function createInitialKitchenSoundDemoState(): KitchenSoundDemoState {
   return {
     phase: "kit_review",
+    materialSource: "seeded_demo",
+    intakeCandidateMaterials: [...KITCHEN_SOUND_REQUIRED_MATERIALS],
     confirmedMaterials: [],
     selectedWeatherTags: [...KITCHEN_SOUND_SUGGESTED_WEATHER_TAGS],
     parentApprovedWeather: false,
@@ -120,6 +134,7 @@ export function canStartKitchenSoundQuest(
   return (
     state.phase === "kit_review" &&
     hasExactMaterialKit(state.confirmedMaterials) &&
+    hasExactMaterialKit(state.intakeCandidateMaterials) &&
     state.selectedWeatherTags.length >= 1 &&
     state.selectedWeatherTags.length <= 4 &&
     state.parentApprovedWeather &&
@@ -183,12 +198,50 @@ export function kitchenSoundDemoReducer(
   }
 
   switch (action.type) {
+    case "SET_MATERIAL_SOURCE":
+      return state.phase === "kit_review"
+        ? {
+            ...state,
+            materialSource: action.source,
+            intakeCandidateMaterials:
+              action.source === "seeded_demo"
+                ? [...KITCHEN_SOUND_REQUIRED_MATERIALS]
+                : [],
+            confirmedMaterials: [],
+            parentConfirmedSafety: false,
+            activityContext: null,
+          }
+        : state;
+
+    case "SET_MATERIAL_CANDIDATES":
+      return state.phase === "kit_review"
+        ? {
+            ...state,
+            intakeCandidateMaterials: action.materials.filter((material) =>
+              KITCHEN_SOUND_REQUIRED_MATERIALS.some(
+                (requiredMaterial) => requiredMaterial === material,
+              ),
+            ),
+            confirmedMaterials: [],
+            parentConfirmedSafety: false,
+            activityContext: null,
+          }
+        : state;
+
+    case "CLEAR_MATERIAL_CONFIRMATION":
+      return state.phase === "kit_review"
+        ? {
+            ...state,
+            confirmedMaterials: [],
+            parentConfirmedSafety: false,
+            activityContext: null,
+          }
+        : state;
+
     case "TOGGLE_MATERIAL": {
       if (
         state.phase !== "kit_review" ||
-        !KITCHEN_SOUND_REQUIRED_MATERIALS.some(
-          (material) => material === action.material,
-        )
+        !state.intakeCandidateMaterials.includes(action.material)
       ) {
         return state;
       }
@@ -243,6 +296,7 @@ export function kitchenSoundDemoReducer(
       }
 
       const activityContext = createKitchenSoundActivityContext({
+        materialSource: state.materialSource,
         confirmedMaterials: state.confirmedMaterials,
         approvedWeatherTags: state.selectedWeatherTags,
         parentConfirmedSafety: state.parentConfirmedSafety,

@@ -38,9 +38,10 @@ or analyzed in the seeded path.
 
 1. **Set the stage** — The seeded case shows `3–4 years`, “grown-up co-play,”
    and an object-only prepared photo. Choosing another stage is future work.
-2. **Review the prepared kit** — The parent sees the local image fixture and an
-   explicit statement that nothing was uploaded or analyzed. Capture and typed
-   material entry are not implemented in this slice.
+2. **Choose an intake path** — The parent can use the prepared kit, select an
+   object-only JPEG, PNG, or WebP for a browser-local preview, or type object
+   names. The local photo is not uploaded or analyzed. Typed input uses a
+   deterministic allowlist rather than pretending to be model recognition.
 3. **See, then confirm** — The app shows three suggested cards: `plastic
    container`, `wooden spoon`, and `dish towel`. The parent taps to confirm each
    and confirms that all items are safe, room-temperature, and supervised.
@@ -57,14 +58,22 @@ or analyzed in the seeded path.
 | Mode | What happens | How to present it honestly |
 | --- | --- | --- |
 | Live (future) | GPT-5.6 reads the object-only photo and returns a constrained `PhotoInventory` | Show the analysis result and parent confirmation |
-| Seeded (implemented) | The prepared photo loads a matching, Zod-parsed `PhotoInventory` fixture | The persistent `Seeded demo` banner says there was no live analysis |
+| Local photo shell (implemented) | The browser previews an object-only file, then offers the prepared sound-kit categories for parent confirmation | State that the photo stays local and has not been analyzed |
+| Typed shell (implemented) | A deterministic alias table maps safe Kitchen Sound names to the same confirmation cards and keeps unsafe, contact-like, off-quest, and unknown entries out | Show both accepted and excluded entries before confirmation |
+| Seeded fallback (implemented) | The prepared photo loads a matching, Zod-parsed `PhotoInventory` fixture | The persistent seeded label says there was no live analysis |
 
-Both modes must pass through the same validation and parent-confirmation step.
+All modes must pass through the same validation and parent-confirmation step.
 That makes the fallback a reliability feature rather than a fake demonstration.
 
-Typed materials will use the same flow when implemented: the parent will see
-normalized material cards, remove anything unsuitable, and confirm that only
-safe items enter the plan.
+All three implemented paths converge on the same material and adult-safety
+confirmation. Editing the typed list, replacing or removing a photo, or
+switching paths clears stale confirmations. The quest cannot start until the
+current path is complete.
+
+Before a future live adapter sends a file, the server must re-encode it to strip
+metadata, enforce size and dimension limits, screen the object-only boundary,
+and avoid content logging. The current local shell does not need or claim those
+network-upload controls.
 
 ## Parent-facing generated output
 
@@ -80,7 +89,7 @@ Developmental focus: descriptive words, cause and effect,
 early patterning, shared attention and turn-taking.
 ```
 
-## Implemented seeded-slice acceptance criteria
+## Implemented intake-and-seeded acceptance criteria
 
 - A parent can see exactly which suggested objects will be used.
 - The quest cannot start until all three exact demo materials, the selected
@@ -93,3 +102,9 @@ early patterning, shared attention and turn-taking.
   context.
 - At most one next suggestion is created from parent-approved allowlisted tags.
 - Reset and reload clear all demo state.
+- JPEG, PNG, and WebP files under 8 MB are the only locally previewable photo
+  types. Their signatures must match, decoding must succeed, and decoded images
+  must stay within 16 megapixels and 6000 pixels per side. Changing the photo
+  invalidates prior material confirmation.
+- Typed aliases are bounded to five short object names and never become freeform
+  activity instructions.

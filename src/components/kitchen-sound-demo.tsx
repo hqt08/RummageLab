@@ -1,7 +1,13 @@
 "use client";
 
 import Image from "next/image";
-import React, { useEffect, useReducer, useRef, useState } from "react";
+import React, {
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+} from "react";
 
 import { SoundMixTool } from "./sound-mix-tool";
 import {
@@ -22,6 +28,16 @@ import {
   type DemoWeatherTag,
 } from "../lib/demo/kitchen-sound-detectives";
 import { findLearningFocus } from "../lib/data/learning-focuses";
+import {
+  createLocalPhotoPreview,
+  normalizeKitchenSoundTypedMaterials,
+  readLocalObjectPhotoDimensions,
+  releaseLocalPhotoPreview,
+  validateLocalObjectPhoto,
+  validateLocalObjectPhotoContent,
+  validateLocalObjectPhotoDimensions,
+  type MaterialIntakeSource,
+} from "../lib/demo/material-intake";
 import type { AllowedMaterialCategory } from "../lib/schemas";
 
 const materialDetails: Record<AllowedMaterialCategory, string> = {
@@ -33,6 +49,35 @@ const materialDetails: Record<AllowedMaterialCategory, string> = {
   board_book: "Intact, sturdy pages",
   large_soft_ball: "Too large to fit in a child’s mouth",
   large_natural_object: "Large, clean, and adult-checked",
+};
+
+const materialNames: Record<AllowedMaterialCategory, string> = {
+  large_empty_plastic_container: "empty plastic container(s)",
+  wooden_kitchen_utensil: "wooden spoon or utensil",
+  silicone_kitchen_utensil: "silicone kitchen utensil",
+  soft_cloth: "clean dish towel or soft cloth",
+  paper_or_cardboard: "paper or cardboard",
+  board_book: "board book",
+  large_soft_ball: "large soft ball",
+  large_natural_object: "large natural object",
+};
+
+const intakeChoiceCopy: Record<
+  MaterialIntakeSource,
+  { label: string; detail: string }
+> = {
+  seeded_demo: {
+    label: "Use the prepared kit",
+    detail: "Fast, reliable judge path",
+  },
+  photo: {
+    label: "Take or choose an object photo",
+    detail: "Local preview; no upload",
+  },
+  typed: {
+    label: "Type what you have",
+    detail: "Small on-device allowlist",
+  },
 };
 
 const weatherLabels: Record<DemoWeatherTag, string> = {
@@ -99,9 +144,36 @@ export function KitchenSoundDemo() {
   const [soundTrail, setSoundTrail] = useState<string[]>([]);
   const [announcement, setAnnouncement] = useState("");
   const [resetVersion, setResetVersion] = useState(0);
+  const [typedMaterialText, setTypedMaterialText] = useState("");
+  const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
+  const [photoFileName, setPhotoFileName] = useState("");
+  const [photoError, setPhotoError] = useState<string | null>(null);
   const demoMainRef = useRef<HTMLElement>(null);
   const stageHeadingRef = useRef<HTMLHeadingElement>(null);
   const shouldFocusStageRef = useRef(false);
+  const photoPreviewUrlRef = useRef<string | null>(null);
+  const photoSelectionVersionRef = useRef(0);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+
+  const typedMaterialNormalization = useMemo(
+    () => normalizeKitchenSoundTypedMaterials(typedMaterialText),
+    [typedMaterialText],
+  );
+
+  const suggestedMaterialItems =
+    state.materialSource === "typed"
+      ? typedMaterialNormalization.accepted.map((item) => ({
+          suggestedLabel: item.displayLabel,
+          allowedMaterialCategory: item.category,
+        }))
+      : kitchenSoundPhotoInventory.suggestedItems;
+
+  const materialSuggestionsReady =
+    state.materialSource === "seeded_demo" ||
+    (state.materialSource === "photo" && photoPreviewUrl !== null) ||
+    (state.materialSource === "typed" &&
+      typedMaterialNormalization.accepted.length > 0 &&
+      typedMaterialNormalization.inputError === null);
 
   useEffect(() => {
     if (!shouldFocusStageRef.current) {
@@ -111,6 +183,15 @@ export function KitchenSoundDemo() {
     shouldFocusStageRef.current = false;
     stageHeadingRef.current?.focus();
   }, [state.phase, resetVersion]);
+
+  useEffect(
+    () => () => {
+      photoSelectionVersionRef.current += 1;
+      releaseLocalPhotoPreview(photoPreviewUrlRef.current);
+      photoPreviewUrlRef.current = null;
+    },
+    [],
+  );
 
   function transitionDemo(action: KitchenSoundDemoAction) {
     shouldFocusStageRef.current = true;
@@ -124,12 +205,154 @@ export function KitchenSoundDemo() {
   }
 
   function resetDemo() {
+    photoSelectionVersionRef.current += 1;
+    releaseLocalPhotoPreview(photoPreviewUrlRef.current);
+    photoPreviewUrlRef.current = null;
     shouldFocusStageRef.current = true;
     dispatch({ type: "RESET" });
     setDemoCityLabel(KITCHEN_SOUND_DEMO_LOCATION_LABEL);
     setSoundTrail([]);
+    setTypedMaterialText("");
+    setPhotoPreviewUrl(null);
+    setPhotoFileName("");
+    setPhotoError(null);
+    if (photoInputRef.current) {
+      photoInputRef.current.value = "";
+    }
     setAnnouncement("Demo reset; session data cleared.");
     setResetVersion((version) => version + 1);
+  }
+
+  function clearPhotoSelection() {
+    photoSelectionVersionRef.current += 1;
+    releaseLocalPhotoPreview(photoPreviewUrlRef.current);
+    photoPreviewUrlRef.current = null;
+    setPhotoPreviewUrl(null);
+    setPhotoFileName("");
+    setPhotoError(null);
+    if (photoInputRef.current) {
+      photoInputRef.current.value = "";
+    }
+    dispatch({ type: "SET_MATERIAL_CANDIDATES", materials: [] });
+  }
+
+  function chooseMaterialSource(source: MaterialIntakeSource) {
+    if (state.materialSource === "photo" && source !== "photo") {
+      clearPhotoSelection();
+    }
+    if (state.materialSource === "typed" && source !== "typed") {
+      setTypedMaterialText("");
+    }
+    dispatch({ type: "SET_MATERIAL_SOURCE", source });
+    setAnnouncement(`${intakeChoiceCopy[source].label} selected.`);
+  }
+
+  function updateTypedMaterials(value: string) {
+    const normalization = normalizeKitchenSoundTypedMaterials(value);
+    setTypedMaterialText(value);
+    dispatch({
+      type: "SET_MATERIAL_CANDIDATES",
+      materials:
+        normalization.inputError === null
+          ? normalization.accepted.map((item) => item.category)
+          : [],
+    });
+  }
+
+  async function selectLocalPhoto(event: React.ChangeEvent<HTMLInputElement>) {
+    const input = event.currentTarget;
+    const file = input.files?.[0];
+    const selectionVersion = photoSelectionVersionRef.current + 1;
+    photoSelectionVersionRef.current = selectionVersion;
+    releaseLocalPhotoPreview(photoPreviewUrlRef.current);
+    photoPreviewUrlRef.current = null;
+    setPhotoPreviewUrl(null);
+    setPhotoFileName("");
+    setPhotoError(null);
+    dispatch({ type: "SET_MATERIAL_CANDIDATES", materials: [] });
+
+    if (!file) {
+      return;
+    }
+
+    const validation = validateLocalObjectPhoto(file);
+    if (!validation.ok) {
+      releaseLocalPhotoPreview(photoPreviewUrlRef.current);
+      photoPreviewUrlRef.current = null;
+      setPhotoPreviewUrl(null);
+      setPhotoFileName("");
+      setPhotoError(validation.message);
+      input.value = "";
+      setAnnouncement(validation.message);
+      return;
+    }
+
+    const contentValidation = await validateLocalObjectPhotoContent(file);
+    if (photoSelectionVersionRef.current !== selectionVersion) {
+      return;
+    }
+    if (!contentValidation.ok) {
+      setPhotoError(contentValidation.message);
+      input.value = "";
+      setAnnouncement(contentValidation.message);
+      return;
+    }
+
+    const nextPreviewUrl = createLocalPhotoPreview(
+      file,
+      null,
+    );
+    photoPreviewUrlRef.current = nextPreviewUrl;
+
+    let dimensions: { width: number; height: number };
+    try {
+      dimensions = await readLocalObjectPhotoDimensions(nextPreviewUrl);
+    } catch {
+      if (photoSelectionVersionRef.current !== selectionVersion) {
+        return;
+      }
+      releaseLocalPhotoPreview(nextPreviewUrl);
+      photoPreviewUrlRef.current = null;
+      const message = "That image could not be decoded. Choose another object photo.";
+      setPhotoError(message);
+      input.value = "";
+      setAnnouncement(message);
+      return;
+    }
+
+    if (photoSelectionVersionRef.current !== selectionVersion) {
+      return;
+    }
+    const dimensionValidation = validateLocalObjectPhotoDimensions(dimensions);
+    if (!dimensionValidation.ok) {
+      releaseLocalPhotoPreview(nextPreviewUrl);
+      photoPreviewUrlRef.current = null;
+      setPhotoError(dimensionValidation.message);
+      input.value = "";
+      setAnnouncement(dimensionValidation.message);
+      return;
+    }
+
+    setPhotoPreviewUrl(nextPreviewUrl);
+    setPhotoFileName(file.name);
+    setPhotoError(null);
+    dispatch({
+      type: "SET_MATERIAL_CANDIDATES",
+      materials: [...KITCHEN_SOUND_REQUIRED_MATERIALS],
+    });
+    setAnnouncement(
+      "Object photo ready as a local preview. It was not uploaded or analyzed.",
+    );
+  }
+
+  function startQuest() {
+    if (!canStart) {
+      return;
+    }
+    if (state.materialSource === "typed") {
+      setTypedMaterialText("");
+    }
+    transitionDemo({ type: "START_QUEST" });
   }
 
   function addSound(soundLabel: string) {
@@ -142,6 +365,17 @@ export function KitchenSoundDemo() {
   const missingMaterialCount =
     KITCHEN_SOUND_REQUIRED_MATERIALS.length - state.confirmedMaterials.length;
   const gateParts = [
+    state.materialSource === "photo" && !photoPreviewUrl
+      ? "an object-only photo"
+      : null,
+    state.materialSource === "typed" &&
+    typedMaterialNormalization.accepted.length === 0
+      ? "recognized material names"
+      : null,
+    state.materialSource === "typed" &&
+    typedMaterialNormalization.inputError !== null
+      ? "a shorter material list"
+      : null,
     missingMaterialCount > 0
       ? `${missingMaterialCount} material${missingMaterialCount === 1 ? "" : "s"}`
       : null,
@@ -190,9 +424,13 @@ export function KitchenSoundDemo() {
         </div>
 
         <div className="seeded-banner" role="note">
-          <strong>Seeded demo</strong>
+          <strong>
+            {state.materialSource === "seeded_demo" ? "Seeded demo" : "Local intake"}
+          </strong>
           <span>
-            Prepared example—no live photo, weather, voice, or GPT analysis.
+            {state.materialSource === "seeded_demo"
+              ? "Prepared example—no live photo, weather, voice, or GPT analysis."
+              : "Photo and typed input stay in this browser—no upload, live analysis, storage, or GPT call."}
           </span>
         </div>
 
@@ -229,24 +467,199 @@ export function KitchenSoundDemo() {
               <li>Indoors</li>
             </ul>
 
+            <section className="intake-desk" aria-labelledby="intake-title">
+              <div>
+                <p className="panel-kicker">Pick your starting clue</p>
+                <h2 className="intake-title" id="intake-title">
+                  Rummage your way in.
+                </h2>
+                <p className="intake-copy">
+                  All three paths end at the same grown-up confirmation desk.
+                  Nothing becomes activity context just because it was pictured
+                  or typed.
+                </p>
+              </div>
+              <fieldset>
+                <legend className="sr-only">Choose a material input method</legend>
+                <div className="intake-options">
+                  {(Object.keys(intakeChoiceCopy) as MaterialIntakeSource[]).map(
+                    (source) => (
+                      <label className="intake-option" key={source}>
+                        <input
+                          checked={state.materialSource === source}
+                          name="material-intake-source"
+                          onChange={() => chooseMaterialSource(source)}
+                          type="radio"
+                          value={source}
+                        />
+                        <span>
+                          <strong>{intakeChoiceCopy[source].label}</strong>
+                          <small>{intakeChoiceCopy[source].detail}</small>
+                        </span>
+                      </label>
+                    ),
+                  )}
+                </div>
+              </fieldset>
+            </section>
+
             <div className="kit-grid">
-              <figure className="photo-card">
-                <Image
-                  alt="Two empty plastic containers, a wooden spoon, and a folded teal dish towel arranged on a plain table."
-                  className="demo-photo"
-                  height={1086}
-                  priority
-                  src="/demo/kitchen-sound-detectives.jpg"
-                  width={1448}
-                />
-                <figcaption className="photo-caption">
-                  <span className="specimen-label">Object-only demo photo</span>
-                  <span>
-                    Prepared local fixture · no people, faces, mail, or identifying
-                    details. Nothing was uploaded or analyzed.
-                  </span>
-                </figcaption>
-              </figure>
+              <div className="photo-card">
+                {state.materialSource === "seeded_demo" ? (
+                  <>
+                    <Image
+                      alt="Two empty plastic containers, a wooden spoon, and a folded teal dish towel arranged on a plain table."
+                      className="demo-photo"
+                      height={1086}
+                      priority
+                      src="/demo/kitchen-sound-detectives.jpg"
+                      width={1448}
+                    />
+                    <div className="photo-caption">
+                      <span className="specimen-label">Object-only demo photo</span>
+                      <span>
+                        Prepared local fixture · no people, faces, mail, or
+                        identifying details. Nothing was uploaded or analyzed.
+                      </span>
+                    </div>
+                  </>
+                ) : null}
+
+                {state.materialSource === "photo" ? (
+                  <div className="local-photo-intake">
+                    {photoPreviewUrl ? (
+                      <Image
+                        alt="Parent-selected object-only materials preview."
+                        className="demo-photo"
+                        height={900}
+                        src={photoPreviewUrl}
+                        unoptimized
+                        width={1200}
+                      />
+                    ) : (
+                      <div className="photo-drop-placeholder" aria-hidden="true">
+                        <span>01</span>
+                        <strong>Objects only</strong>
+                        <small>No people, mail, labels, or screens</small>
+                      </div>
+                    )}
+                    <div className="photo-caption">
+                      <span className="specimen-label">Local object photo</span>
+                      <span>
+                        {photoFileName
+                          ? `${photoFileName} is previewed only on this device.`
+                          : "Choose a JPEG, PNG, or WebP under 8 MB."}
+                      </span>
+                    </div>
+                    <label className="file-field">
+                      <span>{photoPreviewUrl ? "Replace photo" : "Take or choose photo"}</span>
+                      <input
+                        accept="image/jpeg,image/png,image/webp"
+                        aria-describedby="photo-boundary"
+                        capture="environment"
+                        onChange={selectLocalPhoto}
+                        ref={photoInputRef}
+                        type="file"
+                      />
+                    </label>
+                    {photoPreviewUrl ? (
+                      <button
+                        className="text-button photo-remove"
+                        onClick={() => {
+                          clearPhotoSelection();
+                          setAnnouncement("Local photo removed and material confirmations cleared.");
+                        }}
+                        type="button"
+                      >
+                        Remove local photo
+                      </button>
+                    ) : null}
+                    <p className="privacy-note" id="photo-boundary">
+                      Objects only: no people, faces, mail, labels, or screens.
+                      This shell never uploads or analyzes the file. It creates
+                      a temporary browser preview and revokes that preview on
+                      replace, remove, reset, or page exit. Metadata stripping
+                      is required before any future live upload.
+                    </p>
+                    {photoError ? (
+                      <p className="input-error" role="alert">
+                        {photoError}
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                {state.materialSource === "typed" ? (
+                  <div className="typed-material-intake">
+                    <span className="specimen-label">Typed material desk</span>
+                    <label className="typed-material-field">
+                      <span>List up to five materials</span>
+                      <textarea
+                        aria-describedby="typed-material-boundary"
+                        maxLength={404}
+                        onChange={(event) =>
+                          updateTypedMaterials(event.currentTarget.value)
+                        }
+                        placeholder={"plastic containers\nwooden spoon\ndish towel"}
+                        rows={6}
+                        value={typedMaterialText}
+                      />
+                    </label>
+                    <p className="privacy-note" id="typed-material-boundary">
+                      Use object names only—no names, phone numbers, email,
+                      address, school, or daycare. This small on-device allowlist
+                      is not AI analysis and cannot promise perfect PII detection.
+                    </p>
+
+                    {typedMaterialNormalization.inputError ? (
+                      <p className="input-error" role="alert">
+                        {typedMaterialNormalization.inputError}
+                      </p>
+                    ) : null}
+
+                    {typedMaterialNormalization.accepted.length > 0 ? (
+                      <div className="normalization-group">
+                        <h3>Ready for your check</h3>
+                        <ul className="normalization-list accepted-list">
+                          {typedMaterialNormalization.accepted.map((item) => (
+                            <li key={item.category}>{item.displayLabel}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null}
+
+                    {typedMaterialNormalization.excluded.length > 0 ? (
+                      <div className="normalization-group">
+                        <h3>Kept out of the kit</h3>
+                        <ul className="normalization-list excluded-list">
+                          {typedMaterialNormalization.excluded.map((item, index) => (
+                            <li key={`${item.reason}-${index}`}>
+                              <strong>
+                                {item.reason === "private_information"
+                                  ? "Contact-like entry"
+                                  : item.inputLabel}
+                              </strong>{" "}
+                              — {item.message}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null}
+
+                    {typedMaterialText.trim() &&
+                    typedMaterialNormalization.missing.length > 0 ? (
+                      <div className="normalization-group missing-group">
+                        <h3>Still needed for this sound quest</h3>
+                        <p>
+                          {typedMaterialNormalization.missing
+                            .map((category) => materialNames[category])
+                            .join(", ")}
+                        </p>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
 
               <section className="confirmation-panel" aria-labelledby="kit-title">
                 <p className="panel-kicker">Parent checkpoint</p>
@@ -254,14 +667,17 @@ export function KitchenSoundDemo() {
                   You decide what enters the quest.
                 </h2>
                 <p className="panel-copy">
-                  These three suggestions came from a prepared fixture. Confirm
-                  what is present and safe before any activity context is built.
+                  {state.materialSource === "seeded_demo"
+                    ? "These three suggestions came from a prepared fixture. Confirm what is present and safe before any activity context is built."
+                    : state.materialSource === "photo"
+                      ? "The photo stays local. This shell shows the prepared sound-kit categories; confirm only what is really in front of you."
+                      : "Only exact matches from the small demo allowlist appear here. Confirm what is present and safe before it enters context."}
                 </p>
 
-                <fieldset>
+                <fieldset disabled={!materialSuggestionsReady}>
                   <legend>Confirm the material kit</legend>
                   <div className="check-list">
-                    {kitchenSoundPhotoInventory.suggestedItems.map((item) => {
+                    {suggestedMaterialItems.map((item) => {
                       const checked = state.confirmedMaterials.includes(
                         item.allowedMaterialCategory,
                       );
@@ -287,6 +703,12 @@ export function KitchenSoundDemo() {
                         </label>
                       );
                     })}
+                    {suggestedMaterialItems.length === 0 ? (
+                      <p className="empty-inventory">
+                        Type a recognized container, wooden utensil, or soft cloth
+                        to create confirmation cards.
+                      </p>
+                    ) : null}
                   </div>
                 </fieldset>
 
@@ -403,7 +825,7 @@ export function KitchenSoundDemo() {
                   <button
                     className="primary-button"
                     disabled={!canStart}
-                    onClick={() => transitionDemo({ type: "START_QUEST" })}
+                    onClick={startQuest}
                     type="button"
                   >
                     Make our sound quest
@@ -709,9 +1131,9 @@ export function KitchenSoundDemo() {
       </main>
 
       <footer className="privacy-footer">
-        Seeded demo · local fixtures only · no login · no API key · no external
-        service or model calls · no analytics · no browser storage. Reset or
-        reload starts over.
+        Seeded activity · optional local intake · no login · no API key · no
+        external service or model calls · no analytics · no browser storage.
+        Reset or reload starts over.
       </footer>
     </div>
   );
