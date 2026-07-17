@@ -13,6 +13,10 @@
 - Pull request #1 merged the seeded Kitchen Sound feature branch. The next
   focused slice, `feat/material-intake-shell`, adds local photo and typed intake
   without live services or persistence.
+- GitHub Actions verifies pull requests and pushes to `main` with Node 24 and
+  `pnpm@9.15.9`: frozen install, lint, typecheck, tests, and production build.
+  The workflow has read-only repository contents permission, uses the pnpm
+  store cache keyed by `pnpm-lock.yaml`, and receives no secrets.
 
 ## Publish-readiness gate
 
@@ -31,6 +35,10 @@ The baseline installs reproducibly from `pnpm-lock.yaml` under Node 24.
 privacy/secret review passed before publication. The first feature branch adds
 fixture, state, component, and interaction tests; it still adds no live API or
 deployment.
+
+The CI workflow runs the same four checks independently after
+`pnpm install --frozen-lockfile`. It cancels only superseded pull-request runs;
+each `main` push continues to receive its own verification run.
 
 The staged-file review found no credential patterns, private keys, raw media,
 unexpected binaries, or oversized files. The only email is the intentional
