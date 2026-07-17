@@ -12,10 +12,11 @@ review before a real launch.
   includes a child or parent name/nickname, date of birth, email, phone number,
   address, precise location, school/daycare, account identifier, face photo,
   video, child voice, or identifying document.
-- Typed notes are free-form and may contain accidental PII. Warn the parent,
-  screen/redact/block likely PII before the observation-extraction model call,
-  never log the text, and discard it immediately after the request. Do not claim
-  automated detection is perfect.
+- Typed notes are free-form and may contain accidental PII. The implemented
+  slice warns the parent and conservatively blocks likely sensitive details with
+  the same deterministic guard in the browser and server before any model call.
+  It never logs the text and discards it after the transient request. The guard
+  is defense in depth and is not described as perfect automated PII detection.
 - A voice memo is an explicit, opt-in **adult-only** recording. Unless
   transcription runs locally, raw parent audio necessarily reaches the
   transcription service before its contents can be screened. Never log or
@@ -39,6 +40,11 @@ review before a real launch.
 - Live Responses API requests use `store: false`. The application does not save
   the upload, sanitized image, provider response, or prompt, and public errors
   use only the closed runtime failure taxonomy.
+- Typed-reflection Responses API requests also use `store: false`. Their public
+  responses contain only a strictly validated observation draft, allowlisted tag
+  suggestions, source metadata, and content-free errors—never the raw note,
+  prompt, provider payload, or error cause. Missing credentials or a rejected
+  provider result use a clearly labeled prepared draft.
 - Material names may be typed, but raw typed text is transient and must be
   normalized into parent-confirmed material categories before model use or any
   adaptive context. Do not store raw text.
@@ -49,7 +55,8 @@ review before a real launch.
 - In the hackathon demo, do not persist raw images, raw audio, transcripts, or
   observations at all: keep only session state and let the parent reset it.
 - A reflection may be a parent-only voice memo or typed text. It is optional;
-  never collect a child voice recording.
+  never collect a child voice recording. Only typed reflection is implemented;
+  voice and transcription remain deferred.
 
 ## Future parent-owned preferences
 

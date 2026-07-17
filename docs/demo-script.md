@@ -3,7 +3,8 @@
 The app implements three material-intake choices and an optional live GPT-5.6
 path. Present the mode honestly: a selected photo is first a browser preview and
 is uploaded only after the parent confirms it contains objects only and chooses
-analysis. Live weather, voice, and reflection processing remain deferred.
+analysis and optional typed parent-reflection extraction. Live weather, voice,
+and PWA work remain deferred.
 
 ## 0:00–0:15 — Promise
 
@@ -32,10 +33,14 @@ validated data but the child experience is parent-led and screen-light.
 ## 1:30–2:00 — Adaptation
 
 Show that reflection may be skipped without losing the finished activity. Then
-take the prepared-example branch, edit the “What you noticed” wording, and
-approve only the small allowlisted tag set. Preview the one session-only cue: a
-short sound-pattern picnic with turn-taking support. Point out that the note is
-not used to make the suggestion.
+type a short parent-only observation and submit it. Point out that a conservative
+local guard blocks likely sensitive details before any request. Review the live
+structured draft when a key is available, or the transparently labeled prepared
+draft when it is not. Edit the “What you noticed” wording and explicitly approve
+only the small allowlisted tag set. Preview the one session-only cue: a short
+sound-pattern picnic with turn-taking support. The raw note and edited wording
+are not used to make the suggestion; reset clears the session and invalidates
+stale work.
 
 ## 2:00–2:30 — Technical proof
 

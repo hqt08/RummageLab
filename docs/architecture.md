@@ -30,8 +30,8 @@ flowchart TB
   TOOL --> ARTIFACT
   FALLBACK --> ARTIFACT
   ARTIFACT --> REFLECTION{"Leave an optional parent reflection?"}
-  REFLECTION -. "deferred" .-> TRANSCRIBE["Transient adult-memo transcription"]
-  REFLECTION -. "deferred" .-> SCREEN["Transient PII screen / redact"]
+  REFLECTION -. "voice deferred" .-> TRANSCRIBE["Transient adult-memo transcription"]
+  REFLECTION -->|typed| SCREEN["Deterministic PII-risk guard<br/>client and server"]
   REFLECTION -->|skip| END["End activity<br/>no adaptive context"]
   TRANSCRIBE --> SCREEN
   SCREEN --> EXTRACT["GPT-5.6 observation extractor"]
@@ -86,10 +86,13 @@ script source, raw HTML, package names, URLs to execute, or shell commands.
 
 ### `ParentReflection` and `NextActivityContext`
 
-`ParentReflection` is optional input from a parent, either typed text or a
-transcribed parent memo. It is not a child recording. It produces a small,
-parent-reviewable observation plus a `NextActivityContext` containing only
-approved tags such as `sound_play`, `two_beat_pattern`, or `turn_taking`.
+`ParentReflection` is optional parent-only typed input in the implemented slice;
+adult memo transcription remains deferred. The text is short, strictly bounded,
+screened before any outbound request, and never persisted or logged. The route
+returns a small parent-reviewable observation draft with allowlisted tag
+suggestions. Only a separate explicit parent approval constructs a
+`NextActivityContext` containing tags such as `sound_play`,
+`two_beat_pattern`, or `turn_taking`.
 
 The context feeds one next-activity suggestion and is session-only in the
 hackathon demo. It is not a diagnosis, grade, milestone assessment, psychological
@@ -121,8 +124,14 @@ profile, or permanent profile of the child.
    and a validated seeded fallback.
 8. Keep only minimum session-local experience state; use no database or durable
    child-related storage in the hackathon demo.
-9. Typed reflection and adult voice processing are deferred and remain off the
-   critical path until separately implemented and reviewed.
+9. Typed reflection is optional and remains off the critical path: Skip always
+   completes the activity. The browser runs a conservative deterministic
+   PII-risk guard before `POST /api/reflection`; the server repeats strict bounds
+   and screening, uses a stateless structured request with `store: false` when a
+   key is available, validates the result, and returns no raw reflection.
+   Missing credentials, unsafe or malformed output, timeout, or provider failure
+   preserve a transparent prepared draft. Reset, phase exit, and replacement
+   requests invalidate stale responses. Adult voice processing remains deferred.
 
 ## Hackathon data posture
 
@@ -139,7 +148,7 @@ expiry, and additional privacy review.
 | Quest start | Parent-confirmed checklist; validated live plan or prepared fallback |
 | Runtime request | Visible loading, fallback, and retry around the server route; invalid or unavailable live output never bypasses the prepared path |
 | Interactive tool | Local rendering; no model round-trip per tap |
-| Parent reflection | Prepared review only; typed reflection and voice are deferred |
+| Parent reflection | Optional typed or prepared review; Skip remains available; voice deferred |
 | Failure | Seeded or cached quest remains available |
 
 ## Phase two: teacher/parent Studio

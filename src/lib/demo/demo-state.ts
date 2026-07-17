@@ -27,6 +27,7 @@ export type KitchenSoundDemoPhase =
   | "complete";
 
 export type ObservationDraft = {
+  observedEvents: string[];
   parentSummary: string;
   interestTags: DemoObservationTag[];
   supportTags: DemoObservationTag[];
@@ -79,6 +80,7 @@ export type KitchenSoundDemoAction =
   | { type: "FINISH_QUEST" }
   | { type: "SKIP_REFLECTION" }
   | { type: "REVIEW_SEEDED_OBSERVATION" }
+  | { type: "REVIEW_OBSERVATION_DRAFT"; draft: ObservationDraft }
   | {
       type: "EDIT_OBSERVATION_SUMMARY";
       parentSummary: string;
@@ -150,6 +152,7 @@ function makeObservationDraft(): ObservationDraft {
     kitchenSoundObservationFixture.unapprovedTemplate;
 
   return {
+    observedEvents: [...observationTemplate.observedEvents],
     parentSummary: observationTemplate.parentSummary,
     interestTags: [
       ...observationTemplate.nextActivityContext.interestTags,
@@ -341,6 +344,21 @@ export function kitchenSoundDemoReducer(
             phase: "observation_review",
             reflectionSkipped: false,
             observationDraft: makeObservationDraft(),
+          }
+        : state;
+
+    case "REVIEW_OBSERVATION_DRAFT":
+      return state.phase === "reflection"
+        ? {
+            ...state,
+            phase: "observation_review",
+            reflectionSkipped: false,
+            observationDraft: {
+              observedEvents: [...action.draft.observedEvents],
+              parentSummary: action.draft.parentSummary,
+              interestTags: [...action.draft.interestTags],
+              supportTags: [...action.draft.supportTags],
+            },
           }
         : state;
 

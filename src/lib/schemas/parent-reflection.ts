@@ -10,7 +10,7 @@ export const ParentReflectionInputSchema = z.object({
   text: z.string().trim().min(1).max(400),
   childVoiceIncluded: z.literal(false),
   parentConfirmedNoSensitiveDetails: z.literal(true),
-});
+}).strict();
 
 export const ObservationTagSchema = z.enum([
   "sound_play",
@@ -34,7 +34,7 @@ export const NextActivityContextSchema = z.object({
   useFor: z.literal("next_activity_only"),
   expires: z.literal("end_of_demo_session"),
   parentEditable: z.literal(true),
-});
+}).strict();
 
 /**
  * Future-only, parent-owned preference memory. This is not used by the
@@ -48,7 +48,7 @@ export const ActivityPreferenceContextSchema = z.object({
   recentApprovedContext: z.array(ObservationTagSchema).max(3),
   expiresAt: z.string().datetime(),
   parentEditable: z.literal(true),
-});
+}).strict();
 
 export const ParentObservationSuggestionSchema = z.object({
   source: z.literal("parent_reported"),
@@ -58,7 +58,7 @@ export const ParentObservationSuggestionSchema = z.object({
   ephemeralOnly: z.literal(true),
   requiresParentReview: z.literal(true),
   notAnAssessment: z.literal(true),
-});
+}).strict();
 
 export type ParentReflectionInput = z.infer<typeof ParentReflectionInputSchema>;
 export type NextActivityContext = z.infer<typeof NextActivityContextSchema>;
