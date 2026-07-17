@@ -374,6 +374,7 @@ export function createKitchenSoundNextSuggestion(
 }
 
 export function buildReviewedObservationSuggestion(input: {
+  observedEvents?: readonly string[];
   parentSummary: string;
   interestTags: readonly DemoObservationTag[];
   supportTags: readonly DemoObservationTag[];
@@ -389,6 +390,9 @@ export function buildReviewedObservationSuggestion(input: {
 
   return ParentObservationSuggestionSchema.parse({
     ...kitchenSoundObservationFixture.unapprovedTemplate,
+    observedEvents: input.observedEvents
+      ? [...input.observedEvents]
+      : kitchenSoundObservationFixture.unapprovedTemplate.observedEvents,
     parentSummary: input.parentSummary,
     nextActivityContext,
   });

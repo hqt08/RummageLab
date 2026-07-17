@@ -44,6 +44,9 @@ import {
   ExperienceResponseSchema,
   PhotoInventoryResponseSchema,
 } from "../lib/runtime/contracts";
+import { ReflectionResponseSchema } from "../lib/runtime/reflection-contracts";
+import { guardTypedReflection } from "../lib/runtime/reflection-guard";
+import { ReflectionRequestLifecycle } from "../lib/runtime/reflection-request-lifecycle";
 
 const materialDetails: Record<AllowedMaterialCategory, string> = {
   large_empty_plastic_container: "Large, empty, and unbreakable",
@@ -117,6 +120,7 @@ const phaseProgress: Record<KitchenSoundDemoPhase, string> = {
 };
 
 type RuntimePreviewStatus = "idle" | "loading" | "fallback" | "error";
+type ReflectionStatus = "idle" | "loading" | "fallback" | "error";
 
 function StageHeader({
   eyebrow,
@@ -161,12 +165,16 @@ export function KitchenSoundDemo() {
   const [activeQuest, setActiveQuest] = useState<QuestSpec>(kitchenSoundQuest);
   const [objectOnlyConsent, setObjectOnlyConsent] = useState(false);
   const [liveSource, setLiveSource] = useState<"live_provider" | "seeded_fallback" | null>(null);
+  const [typedReflection, setTypedReflection] = useState("");
+  const [reflectionStatus, setReflectionStatus] = useState<ReflectionStatus>("idle");
+  const [reflectionMessage, setReflectionMessage] = useState<string | null>(null);
   const demoMainRef = useRef<HTMLElement>(null);
   const stageHeadingRef = useRef<HTMLHeadingElement>(null);
   const shouldFocusStageRef = useRef(false);
   const photoPreviewUrlRef = useRef<string | null>(null);
   const photoSelectionVersionRef = useRef(0);
   const runtimeRequestVersionRef = useRef(0);
+  const reflectionRequestRef = useRef(new ReflectionRequestLifecycle());
   const photoInputRef = useRef<HTMLInputElement>(null);
   const photoFileRef = useRef<File | null>(null);
   const stateRef = useRef(state);
@@ -207,6 +215,7 @@ export function KitchenSoundDemo() {
     () => () => {
       photoSelectionVersionRef.current += 1;
       runtimeRequestVersionRef.current += 1;
+      reflectionRequestRef.current.cancel();
       releaseLocalPhotoPreview(photoPreviewUrlRef.current);
       photoPreviewUrlRef.current = null;
     },
@@ -227,6 +236,7 @@ export function KitchenSoundDemo() {
   function resetDemo() {
     photoSelectionVersionRef.current += 1;
     runtimeRequestVersionRef.current += 1;
+    reflectionRequestRef.current.cancel();
     releaseLocalPhotoPreview(photoPreviewUrlRef.current);
     photoPreviewUrlRef.current = null;
     shouldFocusStageRef.current = true;
@@ -242,6 +252,9 @@ export function KitchenSoundDemo() {
     setActiveQuest(kitchenSoundQuest);
     setObjectOnlyConsent(false);
     setLiveSource(null);
+    setTypedReflection("");
+    setReflectionStatus("idle");
+    setReflectionMessage(null);
     photoFileRef.current = null;
     if (photoInputRef.current) {
       photoInputRef.current.value = "";
@@ -468,6 +481,80 @@ export function KitchenSoundDemo() {
     );
   }
 
+  function skipReflection() {
+    reflectionRequestRef.current.cancel();
+    setTypedReflection("");
+    setReflectionStatus("idle");
+    setReflectionMessage(null);
+    transitionDemo({ type: "SKIP_REFLECTION" });
+  }
+
+  function reviewPreparedObservation() {
+    reflectionRequestRef.current.cancel();
+    setTypedReflection("");
+    setReflectionStatus("idle");
+    setReflectionMessage(null);
+    transitionDemo({ type: "REVIEW_SEEDED_OBSERVATION" });
+  }
+
+  async function submitTypedReflection() {
+    const guarded = guardTypedReflection(typedReflection);
+    if (!guarded.safe) {
+      setReflectionMessage(
+        guarded.code === "empty"
+          ? "Add a short parent observation, or choose Skip reflection."
+          : guarded.code === "too_long"
+            ? "Shorten the note to 400 characters within the byte limit."
+            : "Remove possible names, contact, school, location, account, or health details before sending.",
+      );
+      return;
+    }
+
+    const request = reflectionRequestRef.current.begin();
+    setReflectionStatus("loading");
+    setReflectionMessage(null);
+    try {
+      const response = await fetch("/api/reflection", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          operation: "reflection_suggestion",
+          fixtureId: "kitchen-sound-detectives",
+          reflection: {
+            source: "typed",
+            text: guarded.text,
+            childVoiceIncluded: false,
+          },
+        }),
+        signal: request.signal,
+      });
+      const payload = ReflectionResponseSchema.parse(await response.json());
+      if (!reflectionRequestRef.current.isCurrent(request.version) || stateRef.current.phase !== "reflection") return;
+      setTypedReflection("");
+      setReflectionStatus(payload.runtime.source === "prepared_fallback" ? "fallback" : "idle");
+      setReflectionMessage(
+        payload.runtime.source === "prepared_fallback"
+          ? "Live reflection help was unavailable. A prepared suggestion is ready for your review."
+          : "A short suggestion is ready. Edit it and approve the tags yourself.",
+      );
+      transitionDemo({
+        type: "REVIEW_OBSERVATION_DRAFT",
+        draft: {
+          observedEvents: payload.suggestion.observedEvents,
+          parentSummary: payload.suggestion.parentSummary,
+          interestTags: payload.suggestion.suggestedInterestTags,
+          supportTags: payload.suggestion.suggestedSupportTags,
+        },
+      });
+    } catch {
+      if (!reflectionRequestRef.current.isCurrent(request.version) || request.signal.aborted) return;
+      setReflectionStatus("error");
+      setReflectionMessage("A safe suggestion could not be prepared. Retry, use the prepared example, or skip.");
+    } finally {
+      reflectionRequestRef.current.finish(request.version);
+    }
+  }
+
   const canStart = canStartKitchenSoundQuest(state);
   const missingMaterialCount =
     KITCHEN_SOUND_REQUIRED_MATERIALS.length - state.confirmedMaterials.length;
@@ -508,12 +595,15 @@ export function KitchenSoundDemo() {
       ].filter(Boolean)
     : [];
 
-  const initialObservationInterestTags = [
+  const availableObservationTags = [
     "sound_play",
+    "loud_quiet_contrast",
     "two_beat_pattern",
-  ] as const satisfies readonly DemoObservationTag[];
-  const initialObservationSupportTags = [
     "turn_taking",
+    "descriptive_words",
+    "cause_and_effect",
+    "movement_play",
+    "texture_exploration",
   ] as const satisfies readonly DemoObservationTag[];
 
   return (
@@ -1050,7 +1140,7 @@ export function KitchenSoundDemo() {
         {state.phase === "reflection" ? (
           <section className="stage" data-phase="reflection">
             <StageHeader
-              deck="Reflection is optional and parent-only. This seeded path does not ask for a recording or analyze any text."
+              deck="Reflection is optional and parent-only. Skip, use a prepared example, or send one short typed note after the privacy check."
               eyebrow={phaseProgress[state.phase]}
               headingRef={stageHeadingRef}
               title="What did you notice?"
@@ -1067,10 +1157,48 @@ export function KitchenSoundDemo() {
                 <div className="button-row">
                   <button
                     className="secondary-button"
-                    onClick={() => transitionDemo({ type: "SKIP_REFLECTION" })}
+                    onClick={skipReflection}
                     type="button"
                   >
                     Skip reflection
+                  </button>
+                </div>
+              </article>
+
+              <article className="choice-card">
+                <p className="panel-kicker">Optional typed note</p>
+                <h2 className="panel-title">Turn your note into a draft</h2>
+                <p className="panel-copy">
+                  Write only what you noticed during play. Do not include names,
+                  contact details, school, address, health details, or diagnoses.
+                  The automatic screen is conservative and cannot guarantee detection.
+                </p>
+                <label className="text-field">
+                  Short parent observation
+                  <textarea
+                    aria-describedby="typed-reflection-boundary"
+                    disabled={reflectionStatus === "loading"}
+                    maxLength={400}
+                    onChange={(event) => {
+                      setTypedReflection(event.currentTarget.value);
+                      setReflectionMessage(null);
+                    }}
+                    value={typedReflection}
+                  />
+                </label>
+                <p className="privacy-note" id="typed-reflection-boundary">
+                  {typedReflection.length}/400 characters. Cleared after one request;
+                  never saved or used directly for the next idea.
+                </p>
+                {reflectionMessage ? <p aria-live="polite" className="gate-note">{reflectionMessage}</p> : null}
+                <div className="button-row">
+                  <button
+                    className="primary-button"
+                    disabled={reflectionStatus === "loading"}
+                    onClick={submitTypedReflection}
+                    type="button"
+                  >
+                    {reflectionStatus === "loading" ? "Preparing safely…" : reflectionStatus === "error" ? "Retry typed reflection" : "Prepare reflection draft"}
                   </button>
                 </div>
               </article>
@@ -1085,9 +1213,7 @@ export function KitchenSoundDemo() {
                 <div className="button-row">
                   <button
                     className="primary-button"
-                    onClick={() =>
-                      transitionDemo({ type: "REVIEW_SEEDED_OBSERVATION" })
-                    }
+                    onClick={reviewPreparedObservation}
                     type="button"
                   >
                     Review demo observation
@@ -1109,11 +1235,11 @@ export function KitchenSoundDemo() {
 
             <div className="observation-layout">
               <article className="notebook-card">
-                <div className="seeded-stamp">Prepared demo observation</div>
+                <div className="seeded-stamp">{reflectionStatus === "fallback" ? "Prepared fallback observation" : "Parent-review draft"}</div>
                 <h2 className="panel-title">Parent review</h2>
                 <p className="panel-copy">
-                  No voice or text was analyzed. This editable example exists
-                  only in React memory and disappears on reset or reload.
+                  This editable suggestion exists only in React memory and
+                  disappears on reset or reload. Voice is not implemented.
                 </p>
 
                 <label className="text-field">
@@ -1131,9 +1257,8 @@ export function KitchenSoundDemo() {
                   />
                 </label>
                 <p className="privacy-note" id="summary-boundary">
-                  Keep private details out. This seeded demo does not screen or
-                  send the note, and the note is never used to make the next
-                  suggestion.
+                  Keep private details out. The raw typed note has already been
+                  discarded and is never used to make the next suggestion.
                 </p>
               </article>
 
@@ -1149,7 +1274,7 @@ export function KitchenSoundDemo() {
                 <fieldset className="tag-fieldset">
                   <legend>What held their interest</legend>
                   <div className="tag-grid">
-                    {initialObservationInterestTags.map((tag) => (
+                    {availableObservationTags.map((tag) => (
                       <label className="chip-check" key={tag}>
                         <input
                           checked={state.observationDraft?.interestTags.includes(tag)}
@@ -1167,7 +1292,7 @@ export function KitchenSoundDemo() {
                 <fieldset className="tag-fieldset">
                   <legend>What to support next time</legend>
                   <div className="tag-grid">
-                    {initialObservationSupportTags.map((tag) => (
+                    {availableObservationTags.map((tag) => (
                       <label className="chip-check" key={tag}>
                         <input
                           checked={state.observationDraft?.supportTags.includes(tag)}
@@ -1202,7 +1327,7 @@ export function KitchenSoundDemo() {
                     }
                     type="button"
                   >
-                    Use these tags once
+                    Approve these tags for one idea
                   </button>
                 </div>
               </article>

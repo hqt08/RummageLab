@@ -70,3 +70,11 @@ unchecked item rather than silently assuming an answer.
       model output, and preserve the no-key seeded path. This does not authorize
       persistence, analytics, production credentials or deployment,
       authentication, PWA work, live weather, typed reflection, or voice.
+- [x] **Typed parent-reflection authorization:** The optional typed-reflection
+      slice may use a short, parent-only note, a conservative deterministic
+      PII-risk guard before any request, and a server-only structured extraction
+      route with a prepared no-key fallback. Raw text must remain transient and
+      absent from logs and next-activity context. Only parent-edited, explicitly
+      approved allowlisted tags may shape one next recommendation. This does not
+      authorize voice/transcription, persistence, profiles, analytics,
+      authentication, PWA work, live weather, or deployment.

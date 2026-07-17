@@ -50,9 +50,12 @@ or analyzed in the seeded path.
    tap gently; copy a two-beat rhythm; make a rain-to-thunder-to-quiet story.
    The 3-year-old interacts mainly with the real objects; the screen is only a
    visual prompt and parent guide.
-5. **Reflect and adapt** — The parent may skip reflection or edit a clearly
-   prepared observation. Only checked allowlisted tags—not the note—can create
-   exactly one session-only next sound-pattern idea.
+5. **Reflect and adapt** — The parent may skip, type a short parent-only
+   observation, or use a clearly prepared fallback. Typed text is conservatively
+   screened in the browser and server before any live extraction and is never
+   persisted or logged. The parent edits the returned draft and must explicitly
+   approve its allowlisted tags. Only those tags—not the note—can create exactly
+   one session-only next sound-pattern idea.
 
 ## Live and seeded modes
 
