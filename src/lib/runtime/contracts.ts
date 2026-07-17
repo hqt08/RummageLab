@@ -45,6 +45,7 @@ export const RuntimeOperationSchema = z.enum([
  * photo, parent text, provider payload, identifier, or provider-specific error.
  */
 export const RuntimeFailureCodeSchema = z.enum([
+  "provider_disabled",
   "provider_timeout",
   "provider_unavailable",
   "provider_malformed_response",
@@ -68,6 +69,14 @@ export const RuntimeResponseMetaSchema = z
   })
   .strict();
 
+/** Content-free capability marker for the optional server-only live path. */
+export const LiveExperienceCapabilitySchema = z
+  .object({
+    livePhotoAnalysisAvailable: z.boolean(),
+    seededDemoAvailable: z.literal(true),
+  })
+  .strict();
+
 export const PhotoInventoryResponseSchema = z
   .object({
     inventory: PhotoInventorySchema,
@@ -87,6 +96,7 @@ export type ExperienceRequest = z.infer<typeof ExperienceRequestSchema>;
 export type RuntimeOperation = z.infer<typeof RuntimeOperationSchema>;
 export type RuntimeFailureCode = z.infer<typeof RuntimeFailureCodeSchema>;
 export type RuntimeDiagnostic = z.infer<typeof RuntimeDiagnosticSchema>;
+export type LiveExperienceCapability = z.infer<typeof LiveExperienceCapabilitySchema>;
 export type PhotoInventoryResponse = z.infer<typeof PhotoInventoryResponseSchema>;
 export type ExperienceResponse = z.infer<typeof ExperienceResponseSchema>;
 

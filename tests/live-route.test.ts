@@ -2,14 +2,20 @@ import sharp from "sharp";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { GET, POST } from "../src/app/api/live-experience/route";
-import { kitchenSoundActivityContext } from "../src/lib/demo/kitchen-sound-detectives";
+import {
+  kitchenSoundActivityContext,
+  kitchenSoundQuest,
+} from "../src/lib/demo/kitchen-sound-detectives";
 
 const originalKey = process.env.OPENAI_API_KEY;
+const originalLiveSwitch = process.env.RUMMAGELAB_LIVE_OPENAI_ENABLED;
 
 afterEach(() => {
   vi.restoreAllMocks();
   if (originalKey === undefined) delete process.env.OPENAI_API_KEY;
   else process.env.OPENAI_API_KEY = originalKey;
+  if (originalLiveSwitch === undefined) delete process.env.RUMMAGELAB_LIVE_OPENAI_ENABLED;
+  else process.env.RUMMAGELAB_LIVE_OPENAI_ENABLED = originalLiveSwitch;
 });
 
 async function objectPhoto() {
@@ -24,8 +30,9 @@ function providerResponse(value: unknown) {
 }
 
 describe("live experience API route", () => {
-  it("advertises the no-key capability gate and returns seeded inventory without outbound fetch", async () => {
+  it("defaults closed without a key and does not make an outbound request", async () => {
     delete process.env.OPENAI_API_KEY;
+    process.env.RUMMAGELAB_LIVE_OPENAI_ENABLED = "true";
     const fetchSpy = vi.spyOn(globalThis, "fetch");
     expect(await (await GET()).json()).toEqual({ livePhotoAnalysisAvailable: false, seededDemoAvailable: true });
     const form = new FormData();
@@ -40,8 +47,47 @@ describe("live experience API route", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
+  it("fails closed with a key when the switch is false, without reading photo or JSON bodies", async () => {
+    process.env.OPENAI_API_KEY = "test-key";
+    process.env.RUMMAGELAB_LIVE_OPENAI_ENABLED = "false";
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    let photoBodyRead = false;
+    const photoResponse = await POST({
+      headers: new Headers({ "content-type": "multipart/form-data; boundary=private" }),
+      get body() {
+        photoBodyRead = true;
+        throw new Error("disabled path must not read uploads");
+      },
+    } as unknown as Request);
+    const photo = await photoResponse.json();
+    expect(photo.runtime.diagnostic.code).toBe("provider_disabled");
+    expect(photoBodyRead).toBe(false);
+
+    let jsonBodyRead = false;
+    const jsonResponse = await POST({
+      headers: new Headers({ "content-type": "application/json" }),
+      get body() {
+        jsonBodyRead = true;
+        throw new Error("disabled path must not read JSON planning input");
+      },
+    } as unknown as Request);
+    const json = await jsonResponse.json();
+    expect(json.runtime.diagnostic.code).toBe("provider_disabled");
+    expect(jsonBodyRead).toBe(false);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("defaults closed when a key is present but the switch is unset", async () => {
+    process.env.OPENAI_API_KEY = "test-key";
+    delete process.env.RUMMAGELAB_LIVE_OPENAI_ENABLED;
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    expect(await (await GET()).json()).toEqual({ livePhotoAnalysisAvailable: false, seededDemoAvailable: true });
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
   it("rejects unconfirmed uploads and unexpected fields without calling the provider", async () => {
     process.env.OPENAI_API_KEY = "test-key";
+    process.env.RUMMAGELAB_LIVE_OPENAI_ENABLED = "true";
     const fetchSpy = vi.spyOn(globalThis, "fetch");
     const form = new FormData();
     form.set("operation", "photo_inventory");
@@ -56,6 +102,7 @@ describe("live experience API route", () => {
 
   it("rejects oversized streaming uploads with absent or falsely small Content-Length", async () => {
     process.env.OPENAI_API_KEY = "test-key";
+    process.env.RUMMAGELAB_LIVE_OPENAI_ENABLED = "true";
     const fetchSpy = vi.spyOn(globalThis, "fetch");
     for (const declaredLength of [null, "1"]) {
       const form = new FormData();
@@ -77,6 +124,7 @@ describe("live experience API route", () => {
 
   it("returns a strict live inventory through the sanitized server boundary", async () => {
     process.env.OPENAI_API_KEY = "test-key";
+    process.env.RUMMAGELAB_LIVE_OPENAI_ENABLED = "true";
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(providerResponse({
       imageMode: "live", objectOnlyReminder: true, requiresAdultSupervision: true,
       unsafeOrUncertainNotice: "A parent must confirm every object and check it before play.",
@@ -100,6 +148,7 @@ describe("live experience API route", () => {
 
   it("falls back for a missing key or malformed provider activity without leaking raw errors", async () => {
     process.env.OPENAI_API_KEY = "test-key";
+    process.env.RUMMAGELAB_LIVE_OPENAI_ENABLED = "true";
     vi.spyOn(globalThis, "fetch").mockResolvedValue(providerResponse({ raw: "secret-provider-output" }));
     const response = await POST(new Request("http://local/api/live-experience", {
       method: "POST", headers: { "content-type": "application/json" },
@@ -108,5 +157,17 @@ describe("live experience API route", () => {
     const text = await response.text();
     expect(JSON.parse(text).runtime.source).toBe("seeded_fallback");
     expect(text).not.toContain("secret-provider-output");
+  });
+
+  it("keeps live JSON planning available only when both capability settings are present", async () => {
+    process.env.OPENAI_API_KEY = "test-key";
+    process.env.RUMMAGELAB_LIVE_OPENAI_ENABLED = "true";
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(providerResponse(kitchenSoundQuest));
+    const response = await POST(new Request("http://local/api/live-experience", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ operation: "experience_selection", fixtureId: "kitchen-sound-detectives", activityContext: kitchenSoundActivityContext }),
+    }));
+    expect((await response.json()).runtime.source).toBe("live_provider");
+    expect(fetchSpy).toHaveBeenCalledOnce();
   });
 });

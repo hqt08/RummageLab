@@ -119,8 +119,19 @@ Deployment boundaries:
 - production deploys only from `main`;
 - pull requests receive preview URLs;
 - previews default to seeded demo mode and do not need the production OpenAI key;
-- `OPENAI_API_KEY` is server-only and must never use a `NEXT_PUBLIC_` prefix;
+- `OPENAI_API_KEY` and `RUMMAGELAB_LIVE_OPENAI_ENABLED` are server-only and must
+  never use a `NEXT_PUBLIC_` prefix; live mode requires both, and the switch
+  defaults off;
 - production and preview environment variables are configured separately;
 - deploy logs must not contain prompts, photos, transcripts, or parent notes; and
 - the README receives the public production URL only after it works in a fresh,
   signed-out browser.
+
+## Optional live-mode owner control
+
+Do not represent an OpenAI project monthly budget as a strict $10 cap: it is a
+soft threshold, and this stateless app has no billing enforcement. If live mode
+is approved, the owner should use a dedicated OpenAI project, restrictive model
+usage and rate limits, a prepaid balance no greater than $10, auto-recharge off,
+and `RUMMAGELAB_LIVE_OPENAI_ENABLED` in Vercel as a manual emergency off switch.
+Do not change Vercel production variables from a development worktree.

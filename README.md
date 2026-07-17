@@ -2,7 +2,7 @@
 
 > Turn the things around you into moments of discovery for ages 0–6.
 
-**Status:** Seeded demo plus an optional live GPT-5.6 photo-to-activity path · **Track:** Education
+**Status:** Seeded demo plus an optional, default-off live GPT-5.6 photo-to-activity path · **Track:** Education
 
 RummageLab helps a parent turn a few ordinary objects and a child’s curiosity
 into a developmentally appropriate moment of discovery. Every activity ends with
@@ -18,9 +18,10 @@ chat transcript.
 2. The server-only runtime accepts only parent-approved `ActivityContext` and returns
    a Zod-validated `ExperienceSpec`: a parent-led `RummageMoment` for ages 0–3,
    or a short `QuestSpec` for ages 3–6. For the focused 3-year-old demo, an optional
-   live adapter uses GPT-5.6 to suggest an allowlisted photo inventory and compose
-   the validated Kitchen Sound quest. Missing credentials or provider failure fall
-   back to the deterministic seeded path.
+   live adapter uses GPT-5.6 only when a server-side key and explicit emergency
+   switch are both enabled. It suggests an allowlisted photo inventory and composes
+   the validated Kitchen Sound quest. Missing credentials, a disabled switch, or
+   provider failure preserve the deterministic seeded path.
 3. For children 3+, RummageLab can render an approved interactive
    **RummageTool**. For younger children, it gives the parent a simple co-play
    script rather than putting the child in front of a screen.
@@ -42,7 +43,9 @@ try-next idea made only from parent-approved tags.
 The prepared-kit path remains deliberately labeled as seeded and needs no key.
 For live photo analysis, the parent must confirm that the image contains objects
 only. The server validates and re-encodes the transient JPEG, PNG, or WebP in
-memory to strip metadata. The multipart parser enforces an 8 MB photo limit and
+memory to strip metadata, but only after the server-side live switch is enabled.
+When disabled, the photo UI keeps a local preview but does not upload it or fill
+prepared photo candidates. The multipart parser enforces an 8 MB photo limit and
 a 9 MB total request limit while reading the stream, even when `Content-Length`
 is absent or false. The server sends the sanitized image once with `store: false`
 and retains neither the upload nor provider response. Typed names still use a local deterministic
@@ -153,19 +156,32 @@ pnpm dev
 Open `http://localhost:3000` to run the complete seeded Kitchen Sound Detectives
 path. No environment file, login, API key, or external service is required.
 
-Live development is optional. Put a development key only in an ignored
+Live development is optional and defaults off. Put a development key and the
+explicit server-only switch only in an ignored
 `.env.local` file; never commit it or expose it with a `NEXT_PUBLIC_` name:
 
 ```bash
 OPENAI_API_KEY=your-development-key
+RUMMAGELAB_LIVE_OPENAI_ENABLED=true
 ```
 
-The live slice is deliberately pinned to `gpt-5.6`. Without `OPENAI_API_KEY`,
-the prepared seeded demo remains fully usable and live requests fail safely to
-that path.
+The live slice is deliberately pinned to `gpt-5.6`. It runs only when both
+`RUMMAGELAB_LIVE_OPENAI_ENABLED === "true"` and `OPENAI_API_KEY` are present;
+otherwise it fails closed before server photo parsing, image sanitization,
+provider construction, or an outbound model request. The prepared seeded demo
+remains fully usable.
 
-`GET /api/live-experience` reports only whether live photo analysis and the
-seeded demo are available; it never returns credential or provider details.
+`GET /api/live-experience` reports only whether this combined live capability and
+the seeded demo are available; it never returns credential or provider details.
+
+### Live-mode operating boundary
+
+This stateless prototype cannot guarantee a strict $10 spend limit, and an
+OpenAI project monthly budget is a soft alert threshold rather than a hard cap.
+If an owner elects to enable live mode, use a dedicated OpenAI project with the
+model usage and rate limits locked down, a prepaid balance of at most $10,
+auto-recharge off, and `RUMMAGELAB_LIVE_OPENAI_ENABLED` as Vercel's manual
+emergency-off switch. Do not use this application as a billing control.
 
 ## Framework checks
 
@@ -189,8 +205,9 @@ shell.
 1. Open the app.
 2. Use the prepared kit, take or choose an object-only photo, or type the
    material names. Live photo analysis happens only after the parent checks the
-   object-only confirmation and selects **Analyze objects with GPT-5.6**; without
-   a key, the validated prepared inventory remains available.
+   object-only confirmation and selects **Analyze objects with GPT-5.6** when
+   live mode is explicitly enabled. Otherwise, use the prepared kit or typed
+   materials; a photo preview is never uploaded or turned into candidates.
 3. Confirm all three allowlisted materials, the Anchorage demo weather tags,
    and the adult safety checkpoint.
 4. Start the validated `sound_mix` quest and build a three-card sound trail.

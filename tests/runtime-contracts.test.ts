@@ -9,8 +9,10 @@ import {
 import {
   ExperienceRequestSchema,
   PhotoInventoryRequestSchema,
+  RuntimeFailureCodeSchema,
   type ExperienceRuntimeProvider,
 } from "../src/lib/runtime/contracts";
+import { ReflectionFailureCodeSchema } from "../src/lib/runtime/reflection-contracts";
 import {
   RuntimeProviderFailure,
   resolveExperience,
@@ -118,6 +120,13 @@ describe("server-safe runtime request contracts", () => {
 });
 
 describe("runtime fallback and no-content diagnostics", () => {
+  it("admits only the closed disabled diagnostic in both live schemas", () => {
+    expect(RuntimeFailureCodeSchema.safeParse("provider_disabled").success).toBe(true);
+    expect(ReflectionFailureCodeSchema.safeParse("provider_disabled").success).toBe(true);
+    expect(RuntimeFailureCodeSchema.safeParse("raw_provider_error").success).toBe(false);
+    expect(ReflectionFailureCodeSchema.safeParse("raw_provider_error").success).toBe(false);
+  });
+
   it("falls back when a provider response is malformed", async () => {
     const result = await resolveExperience(
       validExperienceRequest,

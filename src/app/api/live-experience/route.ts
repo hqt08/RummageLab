@@ -12,12 +12,17 @@ import {
   PhotoInventoryResponseSchema,
 } from "../../../lib/runtime/contracts";
 import {
+  disabledExperienceResponse,
+  disabledPhotoInventoryResponse,
   resolveExperience,
-  RuntimeProviderFailure,
   runtimeDiagnostic,
   validateLivePhotoInventory,
 } from "../../../lib/runtime/seeded-runtime";
-import { kitchenSoundPhotoInventory } from "../../../lib/demo/kitchen-sound-detectives";
+import { getLiveOpenAICapability } from "../../../lib/runtime/live-openai-server";
+import {
+  kitchenSoundActivityContext,
+  kitchenSoundPhotoInventory,
+} from "../../../lib/demo/kitchen-sound-detectives";
 import { ActivityContextSchema } from "../../../lib/schemas";
 
 export const runtime = "nodejs";
@@ -71,18 +76,36 @@ async function readBoundedJson(request: Request): Promise<unknown> {
 
 export async function GET() {
   return NextResponse.json({
-    livePhotoAnalysisAvailable: Boolean(process.env.OPENAI_API_KEY?.trim()),
+    livePhotoAnalysisAvailable: getLiveOpenAICapability().enabled,
     seededDemoAvailable: true,
   });
 }
 
 export async function POST(request: Request) {
+  const capability = getLiveOpenAICapability();
+  const contentType = request.headers.get("content-type") ?? "";
+
+  // Fail closed before reading multipart bytes, decoding an image, or creating a
+  // provider. The UI avoids this request while disabled; this response keeps a
+  // closed, schema-validated fallback for direct callers.
+  if (!capability.enabled) {
+    if (/^multipart\/form-data(?:;|$)/i.test(contentType)) {
+      return NextResponse.json(PhotoInventoryResponseSchema.parse(disabledPhotoInventoryResponse()));
+    }
+    if (/^application\/json(?:;|$)/i.test(contentType)) {
+      return NextResponse.json(ExperienceResponseSchema.parse(disabledExperienceResponse({
+        fixtureId: "kitchen-sound-detectives",
+        activityContext: kitchenSoundActivityContext,
+      })));
+    }
+    return invalidRequest("unsupported_content_type", 415);
+  }
+
   const contentLength = Number(request.headers.get("content-length") ?? "0");
   if (Number.isFinite(contentLength) && contentLength > MAX_REQUEST_BYTES) {
     return invalidRequest("request_too_large", 413);
   }
 
-  const contentType = request.headers.get("content-type") ?? "";
   if (/^multipart\/form-data(?:;|$)/i.test(contentType)) {
     let upload;
     try {
@@ -106,19 +129,9 @@ export async function POST(request: Request) {
       return invalidRequest("invalid_content");
     }
 
-    if (!process.env.OPENAI_API_KEY?.trim()) {
-      return NextResponse.json(PhotoInventoryResponseSchema.parse({
-        inventory: kitchenSoundPhotoInventory,
-        runtime: {
-          source: "seeded_fallback",
-          diagnostic: runtimeDiagnostic("photo_inventory", new RuntimeProviderFailure("provider_unavailable")),
-        },
-      }));
-    }
-
     try {
       const provider = createOpenAIExperienceProvider({
-        apiKey: process.env.OPENAI_API_KEY,
+        apiKey: capability.apiKey,
         transientImage: {
           mimeType: sanitized.mediaType,
           base64: Buffer.from(sanitized.bytes).toString("base64"),
@@ -150,7 +163,7 @@ export async function POST(request: Request) {
     const raw = await readBoundedJson(request);
     const body = ExperienceBodySchema.parse(raw);
     const provider = createOpenAIExperienceProvider({
-      apiKey: process.env.OPENAI_API_KEY,
+      apiKey: capability.apiKey,
       transientImage: { mimeType: "image/jpeg", base64: "" },
     });
     const result = await resolveExperience({
