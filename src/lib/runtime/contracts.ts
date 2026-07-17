@@ -27,6 +27,14 @@ export const PhotoInventoryRequestSchema = z.discriminatedUnion("mode", [
       objectOnly: z.literal(true),
     })
     .strict(),
+  z
+    .object({
+      mode: z.literal("live_typed_object_labels"),
+      ageStage: AgeStageSchema,
+      /** Bounded, transient object labels after client and server privacy checks. */
+      objectLabels: z.array(z.string().min(1).max(80)).min(1).max(5),
+    })
+    .strict(),
 ]);
 
 export const ExperienceRequestSchema = z
@@ -37,6 +45,7 @@ export const ExperienceRequestSchema = z
 
 export const RuntimeOperationSchema = z.enum([
   "photo_inventory",
+  "typed_object_inventory",
   "experience_selection",
 ]);
 
@@ -47,6 +56,7 @@ export const RuntimeOperationSchema = z.enum([
 export const RuntimeFailureCodeSchema = z.enum([
   "provider_disabled",
   "provider_timeout",
+  "provider_http_error",
   "provider_unavailable",
   "provider_malformed_response",
   "provider_context_mismatch",

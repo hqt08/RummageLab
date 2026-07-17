@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  guardTypedObjectLabels,
   LOCAL_OBJECT_PHOTO_MAX_BYTES,
   LOCAL_OBJECT_PHOTO_MAX_PIXELS,
   createLocalPhotoPreview,
@@ -61,6 +62,21 @@ describe("typed material intake", () => {
       "large_empty_plastic_container",
     );
     expect(result.missing).toContain("large_empty_plastic_container");
+  });
+
+  it("guards transient live labels before they can leave the browser", () => {
+    expect(guardTypedObjectLabels("duck\nball")).toEqual({
+      safe: true,
+      objectLabels: ["duck", "ball"],
+    });
+    expect(guardTypedObjectLabels("my-school address")).toMatchObject({
+      safe: false,
+      code: "private_information",
+    });
+    expect(guardTypedObjectLabels("coin")).toMatchObject({
+      safe: false,
+      code: "unsafe",
+    });
   });
 });
 

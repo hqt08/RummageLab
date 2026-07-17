@@ -10,6 +10,7 @@ import React, {
 } from "react";
 
 import { SoundMixTool } from "./sound-mix-tool";
+import { PredictTool } from "./predict-tool";
 import {
   canCreateKitchenSoundNextSuggestion,
   canStartKitchenSoundQuest,
@@ -21,16 +22,19 @@ import {
 import {
   KITCHEN_SOUND_DEMO_LOCATION_LABEL,
   KITCHEN_SOUND_AVAILABLE_WEATHER_TAGS,
-  KITCHEN_SOUND_REQUIRED_MATERIALS,
-  createKitchenSoundActivityContext,
   kitchenSoundPhotoInventory,
   kitchenSoundQuest,
   type DemoObservationTag,
   type DemoWeatherTag,
 } from "../lib/demo/kitchen-sound-detectives";
+import {
+  createApprovedActivityContext,
+  deterministicApprovedQuestForContext,
+} from "../lib/demo/approved-quest-templates";
 import { findLearningFocus } from "../lib/data/learning-focuses";
 import {
   createLocalPhotoPreview,
+  guardTypedObjectLabels,
   normalizeKitchenSoundTypedMaterials,
   readLocalObjectPhotoDimensions,
   releaseLocalPhotoPreview,
@@ -181,6 +185,7 @@ export function KitchenSoundDemo() {
     KITCHEN_SOUND_DEMO_LOCATION_LABEL,
   );
   const [soundTrail, setSoundTrail] = useState<string[]>([]);
+  const [predictionChoice, setPredictionChoice] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState("");
   const [resetVersion, setResetVersion] = useState(0);
   const [typedMaterialText, setTypedMaterialText] = useState("");
@@ -190,6 +195,9 @@ export function KitchenSoundDemo() {
   const [runtimePreviewStatus, setRuntimePreviewStatus] =
     useState<RuntimePreviewStatus>("idle");
   const [liveInventory, setLiveInventory] = useState<PhotoInventory | null>(null);
+  const [typedLiveInventory, setTypedLiveInventory] = useState<PhotoInventory | null>(null);
+  const [typedInventoryStatus, setTypedInventoryStatus] = useState<RuntimePreviewStatus>("idle");
+  const [typedInventoryMessage, setTypedInventoryMessage] = useState<string | null>(null);
   const [livePhotoAnalysisAvailable, setLivePhotoAnalysisAvailable] = useState(false);
   const [activeQuest, setActiveQuest] = useState<QuestSpec>(kitchenSoundQuest);
   const [objectOnlyConsent, setObjectOnlyConsent] = useState(false);
@@ -216,10 +224,10 @@ export function KitchenSoundDemo() {
 
   const suggestedMaterialItems =
     state.materialSource === "typed"
-      ? typedMaterialNormalization.accepted.map((item) => ({
+      ? (typedLiveInventory?.suggestedItems ?? typedMaterialNormalization.accepted.map((item) => ({
           suggestedLabel: item.displayLabel,
           allowedMaterialCategory: item.category,
-        }))
+        })))
       : state.materialSource === "photo"
         ? liveInventory?.suggestedItems ?? []
         : kitchenSoundPhotoInventory.suggestedItems;
@@ -228,8 +236,9 @@ export function KitchenSoundDemo() {
     state.materialSource === "seeded_demo" ||
     (state.materialSource === "photo" && liveInventory !== null) ||
     (state.materialSource === "typed" &&
-      typedMaterialNormalization.accepted.length > 0 &&
-      typedMaterialNormalization.inputError === null);
+      ((typedLiveInventory !== null) ||
+        (typedMaterialNormalization.accepted.length > 0 &&
+          typedMaterialNormalization.inputError === null)));
 
   useEffect(() => {
     if (!shouldFocusStageRef.current) {
@@ -289,8 +298,12 @@ export function KitchenSoundDemo() {
     setPhotoPreviewUrl(null);
     setPhotoFileName("");
     setPhotoError(null);
+    setPredictionChoice(null);
     setRuntimePreviewStatus("idle");
     setLiveInventory(null);
+    setTypedLiveInventory(null);
+    setTypedInventoryStatus("idle");
+    setTypedInventoryMessage(null);
     setActiveQuest(kitchenSoundQuest);
     setObjectOnlyConsent(false);
     setLiveSource(null);
@@ -330,6 +343,9 @@ export function KitchenSoundDemo() {
     }
     if (state.materialSource === "typed" && source !== "typed") {
       setTypedMaterialText("");
+      setTypedLiveInventory(null);
+      setTypedInventoryStatus("idle");
+      setTypedInventoryMessage(null);
     }
     dispatch({ type: "SET_MATERIAL_SOURCE", source });
     setAnnouncement(`${intakeChoiceCopy[source].label} selected.`);
@@ -339,6 +355,9 @@ export function KitchenSoundDemo() {
     runtimeRequestVersionRef.current += 1;
     const normalization = normalizeKitchenSoundTypedMaterials(value);
     setTypedMaterialText(value);
+    setTypedLiveInventory(null);
+    setTypedInventoryStatus("idle");
+    setTypedInventoryMessage(null);
     dispatch({
       type: "SET_MATERIAL_CANDIDATES",
       materials:
@@ -346,6 +365,55 @@ export function KitchenSoundDemo() {
           ? normalization.accepted.map((item) => item.category)
           : [],
     });
+  }
+
+  async function suggestTypedCategories() {
+    const guarded = guardTypedObjectLabels(typedMaterialText);
+    if (!guarded.safe) {
+      setTypedInventoryMessage(
+        guarded.code === "empty" ? "List one to five everyday object names first."
+          : guarded.code === "too_many" ? "List up to five object names."
+            : guarded.code === "too_long" ? "Keep each object name to 80 characters or fewer."
+              : "Remove possible private details or unsafe items before live analysis.",
+      );
+      return;
+    }
+    if (!livePhotoAnalysisAvailable) {
+      setTypedInventoryMessage("More credits required for OpenAI analysis. The local allowlist remains available.");
+      return;
+    }
+    const requestVersion = ++runtimeRequestVersionRef.current;
+    setTypedInventoryStatus("loading");
+    setTypedInventoryMessage(null);
+    try {
+      const response = await fetch("/api/live-experience", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-rummagelab-operation": "typed_object_inventory",
+        },
+        body: JSON.stringify({ operation: "typed_object_inventory", objectLabels: guarded.objectLabels }),
+      });
+      const payload = PhotoInventoryResponseSchema.parse(await response.json());
+      if (runtimeRequestVersionRef.current !== requestVersion) return;
+      const result = photoAnalysisResult(payload);
+      setLivePhotoAnalysisAvailable(result.livePhotoAnalysisAvailable);
+      if (!result.inventory) {
+        setTypedInventoryStatus("idle");
+        setTypedInventoryMessage("More credits required for OpenAI analysis. The local allowlist remains available.");
+        return;
+      }
+      setTypedLiveInventory(result.inventory);
+      dispatch({ type: "SET_MATERIAL_CANDIDATES", materials: result.candidates });
+      setTypedInventoryStatus(payload.runtime.source === "seeded_fallback" ? "fallback" : "idle");
+      setTypedInventoryMessage(payload.runtime.source === "live_provider"
+        ? "GPT-5.6 suggested safe categories. Confirm every category yourself."
+        : "Live suggestions were unavailable. A prepared fallback is ready for your confirmation.");
+    } catch {
+      if (runtimeRequestVersionRef.current !== requestVersion) return;
+      setTypedInventoryStatus("error");
+      setTypedInventoryMessage("Live suggestions could not be prepared. The local allowlist remains available.");
+    }
   }
 
   async function selectLocalPhoto(event: React.ChangeEvent<HTMLInputElement>) {
@@ -481,19 +549,26 @@ export function KitchenSoundDemo() {
       return;
     }
     if (!livePhotoAnalysisAvailable) {
+      const activityContext = createApprovedActivityContext({
+        materialSource: state.materialSource,
+        confirmedMaterials: state.confirmedMaterials,
+        approvedWeatherTags: state.selectedWeatherTags,
+        parentConfirmedSafety: state.parentConfirmedSafety,
+      });
       runtimeRequestVersionRef.current += 1;
       setRuntimePreviewStatus("idle");
       setLiveSource("seeded_fallback");
       if (state.materialSource === "typed") setTypedMaterialText("");
-      setActiveQuest(kitchenSoundQuest);
-      transitionDemo({ type: "START_QUEST", experience: kitchenSoundQuest });
+      const quest = deterministicApprovedQuestForContext(activityContext);
+      setActiveQuest(quest);
+      transitionDemo({ type: "START_QUEST", experience: quest });
       return;
     }
     const requestVersion = runtimeRequestVersionRef.current + 1;
     runtimeRequestVersionRef.current = requestVersion;
     setRuntimePreviewStatus("loading");
     setAnnouncement("Preparing a validated activity from parent-confirmed context.");
-    const activityContext = createKitchenSoundActivityContext({
+    const activityContext = createApprovedActivityContext({
       materialSource: state.materialSource,
       confirmedMaterials: state.confirmedMaterials,
       approvedWeatherTags: state.selectedWeatherTags,
@@ -531,9 +606,16 @@ export function KitchenSoundDemo() {
     if (state.materialSource === "typed") {
       setTypedMaterialText("");
     }
+    const activityContext = createApprovedActivityContext({
+      materialSource: state.materialSource,
+      confirmedMaterials: state.confirmedMaterials,
+      approvedWeatherTags: state.selectedWeatherTags,
+      parentConfirmedSafety: state.parentConfirmedSafety,
+    });
+    const quest = deterministicApprovedQuestForContext(activityContext);
     setAnnouncement("Opening the prepared, validated fallback quest.");
-    setActiveQuest(kitchenSoundQuest);
-    transitionDemo({ type: "START_QUEST", experience: kitchenSoundQuest });
+    setActiveQuest(quest);
+    transitionDemo({ type: "START_QUEST", experience: quest });
   }
 
   function addSound(soundLabel: string) {
@@ -619,22 +701,20 @@ export function KitchenSoundDemo() {
   }
 
   const canStart = canStartKitchenSoundQuest(state);
-  const missingMaterialCount =
-    KITCHEN_SOUND_REQUIRED_MATERIALS.length - state.confirmedMaterials.length;
   const gateParts = [
     state.materialSource === "photo" && !photoPreviewUrl
       ? "an object-only photo"
       : null,
     state.materialSource === "typed" &&
-    typedMaterialNormalization.accepted.length === 0
+    typedMaterialNormalization.accepted.length === 0 && !typedLiveInventory
       ? "recognized material names"
       : null,
     state.materialSource === "typed" &&
     typedMaterialNormalization.inputError !== null
       ? "a shorter material list"
       : null,
-    missingMaterialCount > 0
-      ? `${missingMaterialCount} material${missingMaterialCount === 1 ? "" : "s"}`
+    state.confirmedMaterials.length === 0
+      ? "one parent-confirmed material"
       : null,
     state.selectedWeatherTags.length === 0 ? "one weather tag" : null,
     !state.parentApprovedWeather ? "weather approval" : null,
@@ -694,7 +774,9 @@ export function KitchenSoundDemo() {
                 ? livePhotoAnalysisAvailable
                   ? "A confirmed object-only photo may be transiently re-encoded and analyzed; it is not stored."
                   : "Local photo preview only—choose the prepared kit or typed materials to continue."
-                : "Typed names use the local allowlist; only confirmed categories may reach planning."}
+                : livePhotoAnalysisAvailable
+                  ? "Typed names can use the local allowlist or transient GPT-5.6 category suggestions; only confirmed categories reach planning."
+                  : "Typed names use the local allowlist; only confirmed categories may reach planning."}
           </span>
         </div>
 
@@ -876,9 +958,31 @@ export function KitchenSoundDemo() {
                     </label>
                     <p className="privacy-note" id="typed-material-boundary">
                       Use object names only—no names, phone numbers, email,
-                      address, school, or daycare. This small on-device allowlist
-                      is not AI analysis and cannot promise perfect PII detection.
+                      address, school, or daycare. You can keep using the small
+                      on-device allowlist, or ask GPT-5.6 to map up to five
+                      transient everyday-object labels into safe categories. Neither
+                      path can promise perfect PII detection.
                     </p>
+
+                    {livePhotoAnalysisAvailable ? (
+                      <div className="button-row">
+                        <button
+                          className="primary-button"
+                          disabled={!typedMaterialText.trim() || typedInventoryStatus === "loading"}
+                          onClick={suggestTypedCategories}
+                          type="button"
+                        >
+                          {typedInventoryStatus === "loading" ? "Suggesting safe categories…" : "Suggest safe categories with GPT-5.6"}
+                        </button>
+                      </div>
+                    ) : (
+                      <p className="privacy-note">More credits required for OpenAI analysis. The local allowlist remains available.</p>
+                    )}
+                    {typedInventoryMessage ? (
+                      <p className={typedInventoryStatus === "error" ? "input-error" : "privacy-note"} role={typedInventoryStatus === "error" ? "alert" : undefined}>
+                        {typedInventoryMessage}
+                      </p>
+                    ) : null}
 
                     {typedMaterialNormalization.inputError ? (
                       <p className="input-error" role="alert">
@@ -920,9 +1024,9 @@ export function KitchenSoundDemo() {
                       <div className="normalization-group missing-group">
                         <h3>Still needed for this sound quest</h3>
                         <p>
-                          {typedMaterialNormalization.missing
+                          Kitchen Sound Detectives uses {typedMaterialNormalization.missing
                             .map((category) => materialNames[category])
-                            .join(", ")}
+                            .join(", ")}. You can also ask GPT-5.6 for a different reviewed activity based on your confirmed objects.
                         </p>
                       </div>
                     ) : null}
@@ -944,7 +1048,9 @@ export function KitchenSoundDemo() {
                         : livePhotoAnalysisAvailable
                           ? "Waiting for a constrained inventory. Confirm only what is really present and safe."
                           : "Choose the prepared kit or typed materials to create confirmation cards."
-                      : "Only exact matches from the small demo allowlist appear here. Confirm what is present and safe before it enters context."}
+                      : typedLiveInventory
+                        ? "GPT-5.6 suggested constrained categories from transient object labels. Confirm only what is really present and safe."
+                        : "Only exact matches from the small demo allowlist appear here. Confirm what is present and safe before it enters context."}
                 </p>
 
                 <fieldset disabled={!materialSuggestionsReady}>
@@ -1103,7 +1209,7 @@ export function KitchenSoundDemo() {
                         onClick={() => startQuest()}
                         type="button"
                       >
-                        Make our sound quest
+                        Make our activity
                       </button>
                     </>
                   ) : null}
@@ -1145,7 +1251,7 @@ export function KitchenSoundDemo() {
         {state.phase === "quest" ? (
           <section className="stage" data-phase="quest">
             <StageHeader
-              deck="The real objects make the sounds. This approved screen only guides prediction, noticing, pattern play, and turns."
+              deck="The real objects lead the play. This approved screen only guides prediction, noticing, pattern play, and turns."
               eyebrow={phaseProgress[state.phase]}
               headingRef={stageHeadingRef}
               title={activeQuest.title}
@@ -1154,10 +1260,10 @@ export function KitchenSoundDemo() {
             <div className="quest-layout">
               <div>
                 <article className="notebook-card">
-                  <p className="panel-kicker">Validated quest · 8 minutes</p>
+                  <p className="panel-kicker">Validated quest · {activeQuest.steps.length > 0 ? `${Math.max(...activeQuest.steps.map((step) => step.minute)) + 2} minutes` : "short"}</p>
                   <h2 className="panel-title">Follow the clues</h2>
                   <p className="parent-cue">
-                    Stay close. Tap gently on a stable surface and let your child
+                    Stay close and follow the grown-up safety note. Let your child
                     point, copy, or choose a word—there is no right answer to score.
                   </p>
 
@@ -1188,12 +1294,20 @@ export function KitchenSoundDemo() {
               </div>
 
               <div>
-                <SoundMixTool
-                  onAdd={addSound}
-                  onClear={() => setSoundTrail([])}
-                  spec={activeQuest.tool.kind === "sound_mix" ? activeQuest.tool : kitchenSoundQuest.tool}
-                  trail={soundTrail}
-                />
+                {activeQuest.tool.kind === "sound_mix" ? (
+                  <SoundMixTool
+                    onAdd={addSound}
+                    onClear={() => setSoundTrail([])}
+                    spec={activeQuest.tool}
+                    trail={soundTrail}
+                  />
+                ) : activeQuest.tool.kind === "predict" ? (
+                  <PredictTool
+                    onChoose={setPredictionChoice}
+                    selectedOption={predictionChoice}
+                    spec={activeQuest.tool}
+                  />
+                ) : null}
 
                 <div className="button-row">
                   <button
@@ -1201,7 +1315,7 @@ export function KitchenSoundDemo() {
                     onClick={() => transitionDemo({ type: "FINISH_QUEST" })}
                     type="button"
                   >
-                    We finished the sound hunt
+                    We finished this activity
                   </button>
                 </div>
               </div>

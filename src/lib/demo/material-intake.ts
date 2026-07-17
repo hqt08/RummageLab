@@ -147,7 +147,8 @@ function looksLikePrivateInformation(value: string): boolean {
     /\b[^\s@]+@[^\s@]+\.[^\s@]+\b/i.test(value) ||
     /\b(?:\+?1[\s.-]?)?(?:\(?\d{3}\)?[\s.-]?)\d{3}[\s.-]?\d{4}\b/.test(
       value,
-    )
+    ) ||
+    /\b(?:school|daycare|preschool|kindergarten|address|apartment|street|avenue|road)\b/i.test(value)
   );
 }
 
@@ -155,6 +156,26 @@ function containsUnsafeWord(value: string): boolean {
   return normalizeLabel(value)
     .split(" ")
     .some((word) => unsafeWords.has(word));
+}
+
+/**
+ * Shared client/server boundary for transient labels sent to the optional live
+ * mapper. It rejects likely PII and known young-child hazards before a model
+ * request, but is not presented as perfect PII detection.
+ */
+export function guardTypedObjectLabels(rawInput: string):
+  | { safe: true; objectLabels: string[] }
+  | { safe: false; code: "empty" | "too_many" | "too_long" | "private_information" | "unsafe" } {
+  const objectLabels = rawInput
+    .split(/[\n,]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  if (objectLabels.length === 0) return { safe: false, code: "empty" };
+  if (objectLabels.length > 5) return { safe: false, code: "too_many" };
+  if (objectLabels.some((item) => item.length > 80)) return { safe: false, code: "too_long" };
+  if (objectLabels.some(looksLikePrivateInformation)) return { safe: false, code: "private_information" };
+  if (objectLabels.some(containsUnsafeWord)) return { safe: false, code: "unsafe" };
+  return { safe: true, objectLabels };
 }
 
 export function validateLocalObjectPhoto(file: {

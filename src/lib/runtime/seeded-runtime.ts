@@ -1,11 +1,11 @@
 import { z } from "zod";
 
 import { findLearningFocus } from "../data/learning-focuses";
+import { kitchenSoundPhotoInventory, kitchenSoundQuest } from "../demo/kitchen-sound-detectives";
 import {
-  KITCHEN_SOUND_REQUIRED_MATERIALS,
-  kitchenSoundPhotoInventory,
-  kitchenSoundQuest,
-} from "../demo/kitchen-sound-detectives";
+  availableApprovedQuestTemplateIds,
+  deterministicApprovedQuestForContext,
+} from "../demo/approved-quest-templates";
 import {
   ExperienceSpecSchema,
   PhotoInventorySchema,
@@ -47,9 +47,9 @@ export const seededRuntimeProvider: ExperienceRuntimeProvider = {
 };
 
 /**
- * The automatic fallback exists only for the reviewed Kitchen Sound fixture.
- * Future adapters use the generic ExperienceRequest contract in contracts.ts;
- * they must register a separately validated fallback for every supported route.
+ * A local reviewed fallback exists only for a context that maps to exactly one
+ * approved template. It never turns raw labels or model-generated instructions
+ * into a learner UI.
  */
 export const SeededKitchenSoundExperienceRequestSchema = z
   .object({
@@ -59,19 +59,10 @@ export const SeededKitchenSoundExperienceRequestSchema = z
   .strict()
   .superRefine((request, refinementContext) => {
     const context = request.activityContext;
-    const confirmedMaterials = context.confirmedMaterials.map(
-      (item) => item.allowedMaterialCategory,
-    );
-    const isExactKit =
-      confirmedMaterials.length === KITCHEN_SOUND_REQUIRED_MATERIALS.length &&
-      KITCHEN_SOUND_REQUIRED_MATERIALS.every((material) =>
-        confirmedMaterials.includes(material),
-      );
-
-    if (context.ageStage !== "3-4y" || !isExactKit || context.availableMinutes < 8) {
+    if (availableApprovedQuestTemplateIds(context).length !== 1) {
       refinementContext.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "The seeded fallback supports only the confirmed Kitchen Sound fixture",
+        message: "The fallback requires exactly one reviewed template for the parent-approved context",
       });
     }
   });
@@ -242,13 +233,9 @@ export async function resolveExperience(
     );
     return { experience, runtime: { source: "seeded_provider" } };
   } catch (error) {
-    // The current fallback is deliberately limited to Kitchen Sound Detectives.
-    // Re-validate it against this exact context rather than ever returning an
-    // age- or material-mismatched activity for an unsupported request.
-    const experience = validateExperienceForContext(
-      kitchenSoundQuest,
-      parsedRequest.activityContext,
-    );
+    // Resolve a local reviewed template against this exact context rather than
+    // returning an age- or material-mismatched activity.
+    const experience = validateExperienceForContext(deterministicApprovedQuestForContext(parsedRequest.activityContext), parsedRequest.activityContext);
     return {
       experience,
       runtime: {
