@@ -42,8 +42,10 @@ import {
 import type { AllowedMaterialCategory, PhotoInventory, QuestSpec } from "../lib/schemas";
 import {
   ExperienceResponseSchema,
+  LiveExperienceCapabilitySchema,
   PhotoInventoryResponseSchema,
 } from "../lib/runtime/contracts";
+import type { PhotoInventoryResponse } from "../lib/runtime/contracts";
 import { ReflectionResponseSchema } from "../lib/runtime/reflection-contracts";
 import { guardTypedReflection } from "../lib/runtime/reflection-guard";
 import { ReflectionRequestLifecycle } from "../lib/runtime/reflection-request-lifecycle";
@@ -122,6 +124,32 @@ const phaseProgress: Record<KitchenSoundDemoPhase, string> = {
 type RuntimePreviewStatus = "idle" | "loading" | "fallback" | "error";
 type ReflectionStatus = "idle" | "loading" | "fallback" | "error";
 
+export function canSendPhotoForLiveAnalysis(
+  livePhotoAnalysisAvailable: boolean,
+  file: File | null,
+  objectOnlyConsent: boolean,
+) {
+  return livePhotoAnalysisAvailable && file !== null && objectOnlyConsent;
+}
+
+export function photoAnalysisResult(payload: PhotoInventoryResponse) {
+  if (payload.runtime.diagnostic?.code === "provider_disabled") {
+    return {
+      livePhotoAnalysisAvailable: false,
+      inventory: null,
+      source: null,
+      candidates: [] as AllowedMaterialCategory[],
+    };
+  }
+
+  return {
+    livePhotoAnalysisAvailable: true,
+    inventory: payload.inventory,
+    source: payload.runtime.source === "live_provider" ? "live_provider" as const : "seeded_fallback" as const,
+    candidates: payload.inventory.suggestedItems.map((item) => item.allowedMaterialCategory),
+  };
+}
+
 function StageHeader({
   eyebrow,
   title,
@@ -162,6 +190,7 @@ export function KitchenSoundDemo() {
   const [runtimePreviewStatus, setRuntimePreviewStatus] =
     useState<RuntimePreviewStatus>("idle");
   const [liveInventory, setLiveInventory] = useState<PhotoInventory | null>(null);
+  const [livePhotoAnalysisAvailable, setLivePhotoAnalysisAvailable] = useState(false);
   const [activeQuest, setActiveQuest] = useState<QuestSpec>(kitchenSoundQuest);
   const [objectOnlyConsent, setObjectOnlyConsent] = useState(false);
   const [liveSource, setLiveSource] = useState<"live_provider" | "seeded_fallback" | null>(null);
@@ -191,8 +220,8 @@ export function KitchenSoundDemo() {
           suggestedLabel: item.displayLabel,
           allowedMaterialCategory: item.category,
         }))
-      : state.materialSource === "photo" && liveInventory
-        ? liveInventory.suggestedItems
+      : state.materialSource === "photo"
+        ? liveInventory?.suggestedItems ?? []
         : kitchenSoundPhotoInventory.suggestedItems;
 
   const materialSuggestionsReady =
@@ -221,6 +250,19 @@ export function KitchenSoundDemo() {
     },
     [],
   );
+
+  useEffect(() => {
+    let active = true;
+    void fetch("/api/live-experience")
+      .then(async (response) => LiveExperienceCapabilitySchema.parse(await response.json()))
+      .then((capability) => {
+        if (active) setLivePhotoAnalysisAvailable(capability.livePhotoAnalysisAvailable);
+      })
+      .catch(() => {
+        if (active) setLivePhotoAnalysisAvailable(false);
+      });
+    return () => { active = false; };
+  }, []);
 
   function transitionDemo(action: KitchenSoundDemoAction) {
     shouldFocusStageRef.current = true;
@@ -396,7 +438,11 @@ export function KitchenSoundDemo() {
 
   async function analyzePhoto() {
     const file = photoFileRef.current;
-    if (!file || !objectOnlyConsent) return;
+    if (!file || !canSendPhotoForLiveAnalysis(livePhotoAnalysisAvailable, file, objectOnlyConsent)) {
+      setLiveInventory(null);
+      dispatch({ type: "SET_MATERIAL_CANDIDATES", materials: [] });
+      return;
+    }
     const requestVersion = ++runtimeRequestVersionRef.current;
     setRuntimePreviewStatus("loading");
     setPhotoError(null);
@@ -409,12 +455,18 @@ export function KitchenSoundDemo() {
       const response = await fetch("/api/live-experience", { method: "POST", body });
       const payload = PhotoInventoryResponseSchema.parse(await response.json());
       if (runtimeRequestVersionRef.current !== requestVersion) return;
-      setLiveInventory(payload.inventory);
-      setLiveSource(payload.runtime.source === "live_provider" ? "live_provider" : "seeded_fallback");
+      const result = photoAnalysisResult(payload);
+      setLivePhotoAnalysisAvailable(result.livePhotoAnalysisAvailable);
+      setLiveInventory(result.inventory);
+      setLiveSource(result.source);
       dispatch({
         type: "SET_MATERIAL_CANDIDATES",
-        materials: payload.inventory.suggestedItems.map((item) => item.allowedMaterialCategory),
+        materials: result.candidates,
       });
+      if (!result.livePhotoAnalysisAvailable) {
+        setRuntimePreviewStatus("idle");
+        return;
+      }
       setRuntimePreviewStatus(payload.runtime.source === "seeded_fallback" ? "fallback" : "idle");
       setAnnouncement(payload.runtime.source === "live_provider" ? "GPT-5.6 suggested a constrained inventory. Confirm every item yourself." : "Live analysis was unavailable; the prepared inventory is ready for your confirmation.");
     } catch {
@@ -426,6 +478,15 @@ export function KitchenSoundDemo() {
 
   async function startQuest() {
     if (!canStart) {
+      return;
+    }
+    if (!livePhotoAnalysisAvailable) {
+      runtimeRequestVersionRef.current += 1;
+      setRuntimePreviewStatus("idle");
+      setLiveSource("seeded_fallback");
+      if (state.materialSource === "typed") setTypedMaterialText("");
+      setActiveQuest(kitchenSoundQuest);
+      transitionDemo({ type: "START_QUEST", experience: kitchenSoundQuest });
       return;
     }
     const requestVersion = runtimeRequestVersionRef.current + 1;
@@ -534,7 +595,9 @@ export function KitchenSoundDemo() {
       setReflectionStatus(payload.runtime.source === "prepared_fallback" ? "fallback" : "idle");
       setReflectionMessage(
         payload.runtime.source === "prepared_fallback"
-          ? "Live reflection help was unavailable. A prepared suggestion is ready for your review."
+          ? payload.runtime.diagnostic?.code === "provider_disabled"
+            ? "More credits required for OpenAI analysis. A prepared suggestion is ready for your review."
+            : "Live reflection help was unavailable. A prepared suggestion is ready for your review."
           : "A short suggestion is ready. Edit it and approve the tags yourself.",
       );
       transitionDemo({
@@ -628,7 +691,9 @@ export function KitchenSoundDemo() {
             {state.materialSource === "seeded_demo"
               ? "Prepared example—no live photo, weather, voice, or GPT analysis."
               : state.materialSource === "photo"
-                ? "A confirmed object-only photo may be transiently re-encoded and analyzed; it is not stored."
+                ? livePhotoAnalysisAvailable
+                  ? "A confirmed object-only photo may be transiently re-encoded and analyzed; it is not stored."
+                  : "Local photo preview only—choose the prepared kit or typed materials to continue."
                 : "Typed names use the local allowlist; only confirmed categories may reach planning."}
           </span>
         </div>
@@ -761,6 +826,9 @@ export function KitchenSoundDemo() {
                         type="file"
                       />
                     </label>
+                    {!livePhotoAnalysisAvailable ? (
+                      <p className="privacy-note">More credits required for OpenAI analysis.</p>
+                    ) : null}
                     {photoPreviewUrl ? (
                       <>
                         <label className="approval-row">
@@ -768,7 +836,9 @@ export function KitchenSoundDemo() {
                           <span className="check-copy">I confirm this photo shows objects only<span className="check-detail">No people, faces, mail, labels, screens, or identifying details.</span></span>
                         </label>
                         <div className="button-row">
-                          <button className="primary-button" disabled={!objectOnlyConsent || runtimePreviewStatus === "loading"} onClick={analyzePhoto} type="button">Analyze objects with GPT-5.6</button>
+                          {livePhotoAnalysisAvailable ? (
+                            <button className="primary-button" disabled={!objectOnlyConsent || runtimePreviewStatus === "loading"} onClick={analyzePhoto} type="button">Analyze objects with GPT-5.6</button>
+                          ) : null}
                           <button className="text-button photo-remove" onClick={() => { clearPhotoSelection(); setAnnouncement("Photo removed and confirmations cleared."); }} type="button">Remove photo</button>
                         </div>
                       </>
@@ -871,7 +941,9 @@ export function KitchenSoundDemo() {
                     : state.materialSource === "photo"
                       ? liveSource === "live_provider"
                         ? "GPT-5.6 suggested these constrained categories. It cannot determine safety; confirm only what is really present and safe."
-                        : "Live analysis was unavailable, so these are prepared suggestions. Confirm only what is really present and safe."
+                        : livePhotoAnalysisAvailable
+                          ? "Waiting for a constrained inventory. Confirm only what is really present and safe."
+                          : "Choose the prepared kit or typed materials to create confirmation cards."
                       : "Only exact matches from the small demo allowlist appear here. Confirm what is present and safe before it enters context."}
                 </p>
 

@@ -17,8 +17,11 @@
 - **API and key disclosure:** The public seeded demo requires no credentials.
   Optional live photo analysis and typed parent-reflection extraction use
   GPT-5.6 through server-only, stateless requests with `store: false` and only
-  when the host has an `OPENAI_API_KEY`. The key must never be committed,
-  exposed to the browser, included in logs, or shared with judges.
+  when the host has both an `OPENAI_API_KEY` and
+  `RUMMAGELAB_LIVE_OPENAI_ENABLED=true`. The key and switch must never be
+  committed, exposed to the browser, included in logs, or shared with judges.
+  With the switch off, uploads and model work fail closed while the seeded demo
+  remains complete.
 - **Video capture sequence:** Follow `docs/demo-script.md`: promise (0:00–0:15),
   parent context and object-only photo (0:15–0:45), Kitchen Sound play
   (0:45–1:30), optional reflection and one approved next idea (1:30–2:00), and
@@ -36,6 +39,12 @@
   and keep the demo available through the judging period. Recheck the
   [official rules](https://openai.devpost.com/rules) immediately before
   submitting.
+- **Optional live-mode owner control:** Do not claim a strict $10 spend limit:
+  this stateless app cannot enforce one and OpenAI project monthly budgets are
+  soft thresholds. If live mode is approved, use a dedicated OpenAI project,
+  locked model usage and rate limits, prepaid balance at most $10, auto-recharge
+  off, and the Vercel `RUMMAGELAB_LIVE_OPENAI_ENABLED` switch as a manual
+  emergency off. Stop if any visible credit indicator is below $10.
 
 ## Product and testing
 
@@ -48,8 +57,8 @@
 - [x] GitHub Actions verifies pull requests and `main` pushes with the pinned
       Node 24 and pnpm 9.15.9 toolchain, frozen install, lint, typecheck, tests,
       and production build without secrets; first hosted PR run passed.
-- [x] Deterministic provider failures (malformed output, mismatch, timeout, or
-      unavailable provider) automatically return the validated seeded fallback;
+- [x] Deterministic provider failures (disabled, malformed output, mismatch,
+      timeout, or unavailable provider) automatically return the validated seeded fallback;
       this is contract coverage, not proof of a live API integration.
 
 ## Required evidence

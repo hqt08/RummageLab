@@ -40,7 +40,16 @@ review before a real launch.
 - Live Responses API requests use `store: false`. The application does not save
   the upload, sanitized image, provider response, or prompt, and public errors
   use only the closed runtime failure taxonomy.
-- Typed-reflection Responses API requests also use `store: false`. Their public
+- The live OpenAI capability is server-only and default-off: both a trimmed
+  `OPENAI_API_KEY` and `RUMMAGELAB_LIVE_OPENAI_ENABLED === "true"` are required.
+  When it is off, the server stops before reading an upload, decoding or
+  sanitizing an image, constructing a provider, or making an outbound model
+  request. A local browser preview may remain visible, but it is not uploaded
+  and does not produce prepared photo candidates.
+- Typed-reflection Responses API requests also use `store: false` when the
+  server-only capability is enabled. When disabled, deterministic PII screening
+  still runs and the route returns only a prepared draft with a content-free
+  `provider_disabled` diagnostic. Their public
   responses contain only a strictly validated observation draft, allowlisted tag
   suggestions, source metadata, and content-free errors—never the raw note,
   prompt, provider payload, or error cause. Missing credentials or a rejected

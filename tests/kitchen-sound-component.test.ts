@@ -2,9 +2,42 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { KitchenSoundDemo } from "../src/components/kitchen-sound-demo";
+import {
+  canSendPhotoForLiveAnalysis,
+  KitchenSoundDemo,
+  photoAnalysisResult,
+} from "../src/components/kitchen-sound-demo";
+import { kitchenSoundPhotoInventory } from "../src/lib/demo/kitchen-sound-detectives";
 
 describe("KitchenSoundDemo", () => {
+  it("keeps photo upload closed until the server capability explicitly allows it", () => {
+    const photo = {} as File;
+    expect(canSendPhotoForLiveAnalysis(false, photo, true)).toBe(false);
+    expect(canSendPhotoForLiveAnalysis(true, photo, false)).toBe(false);
+    expect(canSendPhotoForLiveAnalysis(true, null, true)).toBe(false);
+    expect(canSendPhotoForLiveAnalysis(true, photo, true)).toBe(true);
+  });
+
+  it("clears photo inventory candidates if a late response says the provider is disabled", () => {
+    expect(photoAnalysisResult({
+      inventory: kitchenSoundPhotoInventory,
+      runtime: {
+        source: "seeded_fallback",
+        diagnostic: {
+          operation: "photo_inventory",
+          code: "provider_disabled",
+          fallbackUsed: true,
+          retryable: false,
+        },
+      },
+    })).toEqual({
+      livePhotoAnalysisAvailable: false,
+      inventory: null,
+      source: null,
+      candidates: [],
+    });
+  });
+
   it("renders the honest seeded kit-review boundary and accessible controls", () => {
     const html = renderToStaticMarkup(createElement(KitchenSoundDemo));
 

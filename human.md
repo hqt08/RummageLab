@@ -89,14 +89,19 @@ unchecked item rather than silently assuming an answer.
       <https://rummage-lab.vercel.app/>. Do not continue if any visible credit
       indicator is below $10.
 - [ ] **Optionally enable the live GPT-5.6 path in Vercel:** In the approved
-      Vercel project settings, first confirm an owner-controlled OpenAI project
-      spend cap or alert and that no visible credit indicator is below $10.
+      Vercel project settings, first confirm that no visible credit indicator is
+      below $10. A strict $10 spend cap cannot be guaranteed by this stateless
+      app or an OpenAI project monthly budget, which is a soft threshold.
       Because the prototype routes do not include an application-level abuse
       gate, prefer the no-key seeded production deployment for public judging.
-      If live mode is still approved, add only `OPENAI_API_KEY` as a server-side
-      Production secret and redeploy. Do not paste the value into source, chat,
-      build logs, preview settings, or a `NEXT_PUBLIC_` variable. The public
-      seeded path must continue to work without this secret.
+      If live mode is still approved, use a dedicated OpenAI project with locked
+      model usage and rate limits, a prepaid balance at most $10, and
+      auto-recharge off. Add only `OPENAI_API_KEY` and
+      `RUMMAGELAB_LIVE_OPENAI_ENABLED=true` as server-side Production variables,
+      then redeploy. Treat the switch as a manual emergency off control, not a
+      billing limit. Do not paste the value into source, chat, build logs,
+      preview settings, or a `NEXT_PUBLIC_` variable. The public seeded path
+      must continue to work without these variables.
 - [ ] **Record real Codex evidence:** In the core build task, run `/feedback`
       and replace the `TBD` core Session ID in `README.md` and
       `docs/codex-decisions.md`. Never invent or reuse an unrelated ID.

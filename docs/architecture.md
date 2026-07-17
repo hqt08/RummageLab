@@ -102,35 +102,42 @@ profile, or permanent profile of the child.
 
 1. Render a parent-facing photo/camera shell immediately, with an explicit
    “objects only; no people” reminder.
-2. `POST /api/live-experience` owns transient multipart bytes. It validates and
-   bounds the upload while streaming (8 MB photo, 9 MB complete request), then
-   re-encodes the image in memory and passes only sanitized bytes to the
-   server-only OpenAI provider. The stream limits do not trust `Content-Length`.
-   Runtime responses omit bytes, typed text, filenames, prompts, and provider payloads.
-   `GET /api/live-experience` exposes only content-free capability booleans so
-   the UI can present live mode honestly without revealing configuration.
-3. In live mode, request a constrained `PhotoInventory` from the confirmed
+2. `GET /api/live-experience` exposes only content-free capability booleans so
+   the UI can present live mode honestly without revealing configuration. Live
+   mode requires both a server-only key and `RUMMAGELAB_LIVE_OPENAI_ENABLED ===
+   "true"`; it defaults off. When off, `POST /api/live-experience` stops before
+   reading multipart bytes or JSON planning input, sanitizing an image, creating
+   a provider, or making an outbound model request. The photo UI retains only a
+   local preview and provides no seeded photo candidates.
+3. When live mode is on, `POST /api/live-experience` owns transient multipart
+   bytes. It validates and bounds the upload while streaming (8 MB photo, 9 MB
+   complete request), then re-encodes the image in memory and passes only
+   sanitized bytes to the server-only OpenAI provider. The stream limits do not
+   trust `Content-Length`. Runtime responses omit bytes, typed text, filenames,
+   prompts, and provider payloads.
+4. In live mode, request a constrained `PhotoInventory` from the confirmed
    object-only image. In seeded mode, load the matching fixture.
    Both paths use the same schema and require parent confirmation.
-4. Typed materials and photo suggestions use the same material-confirmation and
+5. Typed materials and photo suggestions use the same material-confirmation and
    safety path. Require parent confirmation before activity planning.
-5. The current weather tags are prepared chips; a live weather adapter is
+6. The current weather tags are prepared chips; a live weather adapter is
    deferred. Only parent-approved broad tags could ever enter planning.
-6. The live adapter sends one context-rich request for an `ExperienceSpec`; it
+7. The live adapter sends one context-rich request for an `ExperienceSpec`; it
    does not chain model calls before the child can begin.
-7. Validate the response and its age, time, focus-ID, and confirmed-material
+8. Validate the response and its age, time, focus-ID, and confirmed-material
    compatibility before rendering the corresponding prebuilt component. Malformed,
    mismatched, unavailable, and timeout outcomes map to a content-free taxonomy
    and a validated seeded fallback.
-8. Keep only minimum session-local experience state; use no database or durable
+9. Keep only minimum session-local experience state; use no database or durable
    child-related storage in the hackathon demo.
-9. Typed reflection is optional and remains off the critical path: Skip always
+10. Typed reflection is optional and remains off the critical path: Skip always
    completes the activity. The browser runs a conservative deterministic
    PII-risk guard before `POST /api/reflection`; the server repeats strict bounds
-   and screening, uses a stateless structured request with `store: false` when a
-   key is available, validates the result, and returns no raw reflection.
-   Missing credentials, unsafe or malformed output, timeout, or provider failure
-   preserve a transparent prepared draft. Reset, phase exit, and replacement
+   and screening, uses a stateless structured request with `store: false` only
+   when the same live capability is enabled, validates the result, and returns
+   no raw reflection. A disabled capability returns a prepared draft without
+   provider creation; missing credentials, unsafe or malformed output, timeout,
+   or provider failure also preserve a transparent prepared draft. Reset, phase exit, and replacement
    requests invalidate stale responses. Adult voice processing remains deferred.
 
 ## Hackathon data posture

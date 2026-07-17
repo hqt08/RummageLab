@@ -37,6 +37,7 @@ export const ReflectionSuggestionDraftSchema = z.object({
 });
 
 export const ReflectionFailureCodeSchema = z.enum([
+  "provider_disabled",
   "provider_timeout",
   "provider_unavailable",
   "provider_malformed_response",

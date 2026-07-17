@@ -106,7 +106,7 @@ function diagnostic(operation: RuntimeOperation, code: RuntimeFailureCode) {
     operation,
     code,
     fallbackUsed: true,
-    retryable: code !== "provider_context_mismatch",
+    retryable: code !== "provider_context_mismatch" && code !== "provider_disabled",
   });
 }
 
@@ -176,6 +176,33 @@ export function runtimeDiagnostic(
   error: unknown,
 ) {
   return diagnostic(operation, failureCode(error));
+}
+
+export function disabledExperienceResponse(
+  request: SeededKitchenSoundExperienceRequest,
+): ExperienceResponse {
+  const parsedRequest = SeededKitchenSoundExperienceRequestSchema.parse(request);
+  const experience = validateExperienceForContext(
+    kitchenSoundQuest,
+    parsedRequest.activityContext,
+  );
+  return {
+    experience,
+    runtime: {
+      source: "seeded_fallback",
+      diagnostic: diagnostic("experience_selection", "provider_disabled"),
+    },
+  };
+}
+
+export function disabledPhotoInventoryResponse(): PhotoInventoryResponse {
+  return {
+    inventory: kitchenSoundPhotoInventory,
+    runtime: {
+      source: "seeded_fallback",
+      diagnostic: diagnostic("photo_inventory", "provider_disabled"),
+    },
+  };
 }
 
 export async function resolvePhotoInventory(

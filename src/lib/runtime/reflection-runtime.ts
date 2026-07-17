@@ -28,6 +28,21 @@ export const preparedReflectionSuggestion = ReflectionSuggestionDraftSchema.pars
   notAnAssessment: true,
 });
 
+export function disabledReflectionResponse() {
+  return ReflectionResponseSchema.parse({
+    suggestion: preparedReflectionSuggestion,
+    runtime: {
+      source: "prepared_fallback",
+      diagnostic: {
+        operation: "reflection_suggestion",
+        code: "provider_disabled",
+        fallbackUsed: true,
+        retryable: false,
+      },
+    },
+  });
+}
+
 function failureCode(error: unknown): ReflectionFailureCode {
   if (error instanceof ReflectionProviderFailure) return error.code;
   if (error instanceof z.ZodError) return "provider_malformed_response";
