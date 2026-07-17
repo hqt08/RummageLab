@@ -57,7 +57,7 @@ or analyzed in the seeded path.
 
 | Mode | What happens | How to present it honestly |
 | --- | --- | --- |
-| Live (future) | GPT-5.6 reads the object-only photo and returns a constrained `PhotoInventory` | Show the analysis result and parent confirmation |
+| Live (future) | A server-only GPT-5.6 adapter may read the object-only photo and return a constrained `PhotoInventory` | Validate the transient upload and analysis result, then require parent confirmation |
 | Local photo shell (implemented) | The browser previews an object-only file, then offers the prepared sound-kit categories for parent confirmation | State that the photo stays local and has not been analyzed |
 | Typed shell (implemented) | A deterministic alias table maps safe Kitchen Sound names to the same confirmation cards and keeps unsafe, contact-like, off-quest, and unknown entries out | Show both accepted and excluded entries before confirmation |
 | Seeded fallback (implemented) | The prepared photo loads a matching, Zod-parsed `PhotoInventory` fixture | The persistent seeded label says there was no live analysis |
@@ -74,6 +74,13 @@ Before a future live adapter sends a file, the server must re-encode it to strip
 metadata, enforce size and dimension limits, screen the object-only boundary,
 and avoid content logging. The current local shell does not need or claim those
 network-upload controls.
+
+The implemented runtime seam has no upload route, API call, SDK, or credential.
+It accepts only content-free request metadata and validated context. If a provider
+returns malformed or incompatible data, times out, or is unavailable, it returns
+the prepared Zod-validated fallback with a public diagnostic that contains only a
+closed error code and retry flag. The demo exposes that loading/fallback/retry
+state without implying that a local photo has been analyzed.
 
 ## Parent-facing generated output
 

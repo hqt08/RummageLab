@@ -26,6 +26,7 @@ describe("KitchenSoundDemo", () => {
     expect(html).toContain("Not sure");
     expect(html).toContain("Choose 1–4 broad tags");
     expect(html).toContain("Make our sound quest");
+    expect(html).toContain("Preview fallback and retry");
     expect(html).toContain('type="checkbox"');
     expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Make our sound quest/);
     expect(html).not.toContain("sessionStorage");

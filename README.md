@@ -2,7 +2,7 @@
 
 > Turn the things around you into moments of discovery for ages 0–6.
 
-**Status:** Seeded demo plus local material intake implemented · **Track:** Education
+**Status:** Seeded demo, local intake, and a deterministic runtime-contract seam · **Track:** Education
 
 RummageLab helps a parent turn a few ordinary objects and a child’s curiosity
 into a developmentally appropriate moment of discovery. Every activity ends with
@@ -11,19 +11,20 @@ chat transcript.
 
 ## The core experience
 
-1. A parent chooses an age stage, photographs a few safe household objects or
-   types their materials, then confirms the small material inventory the app
-   suggests. Live conditions for the editable **Anchorage, Alaska** demo default
-   preselect broad weather tags; the parent changes or approves them before they
-   shape the plan.
-2. GPT-5.6 uses the approved activity context to produce a structured `ExperienceSpec`: a parent-led
-   `RummageMoment` for ages 0–3, or a short `QuestSpec` for ages 3–6.
+1. In the implemented demo, a parent uses a prepared kit, browser-local
+   object-photo preview, or small typed-material allowlist, then confirms the
+   same safe material inventory. The visible **Anchorage, Alaska** label and
+   broad weather chips are prepared demo context—not a lookup or family location.
+2. The server-only runtime seam accepts only parent-approved `ActivityContext` and returns
+   a Zod-validated `ExperienceSpec`: a parent-led `RummageMoment` for ages 0–3,
+   or a short `QuestSpec` for ages 3–6. Its sole current provider is deterministic
+   and seeded; a real GPT-5.6 adapter remains future work.
 3. For children 3+, RummageLab can render an approved interactive
    **RummageTool**. For younger children, it gives the parent a simple co-play
    script rather than putting the child in front of a screen.
-4. A parent can optionally leave a brief voice reflection or type a note. The
-   system derives an editable, parent-owned observation and uses only approved
-   next-activity tags to suggest what to try next.
+4. The current quest includes an optional prepared observation review. Optional
+   typed reflection and adult voice processing are deferred; no recording or
+   free-text analysis is implemented.
 
 The first implemented experience is **“Kitchen Sound Detectives.”** A parent can
 use the prepared kit, preview a new object-only photo locally, or type material
@@ -37,8 +38,9 @@ The activity remains deliberately labeled as seeded. A selected photo is shown
 only through a browser-local object URL and is neither uploaded nor analyzed;
 typed names are normalized by a small deterministic allowlist. The slice makes
 no live weather, voice, GPT, analytics, storage, or external-service call.
-Resetting or reloading clears the in-memory state. Live adapters remain future
-work.
+Resetting or reloading clears the in-memory state. A client-local preview can
+also show loading, automatic seeded-fallback, and retry states without a key or
+runtime planner/network request. Live adapters remain future work.
 
 ## Architecture
 
@@ -47,13 +49,13 @@ flowchart LR
   subgraph Device["Parent and child device"]
     C["Parent: age stage, typed or photo materials,<br/>weather and available time"]
     A["Child: parent-led moment<br/>or short quest"]
-    V["Parent: optional adult voice memo"]
-    T["Parent: optional typed note"]
+    V["Deferred: optional adult voice memo"]
+    T["Deferred: optional typed note"]
   end
 
   subgraph App["RummageLab web app"]
-    UI["Next.js PWA<br/>React + TypeScript"]
-    API["Server API<br/>rate limits + transient handling"]
+    UI["Next.js web app<br/>React + TypeScript"]
+    API["Future server adapter<br/>transient handling"]
     PLANVAL["Experience validation +<br/>developmental-focus allowlist"]
     PII["Transient text screening<br/>no content logs"]
     OBSVAL["Observation validation"]
@@ -76,11 +78,14 @@ flowchart LR
     CX --> UI
   end
 
-  C --> UI --> API --> QD --> PLANVAL --> ENG --> A
-  V --> UI --> API --> STT --> PII
-  T --> UI --> API --> PII
-  PII --> LE --> OBSVAL --> REVIEW --> SESSION
-  SESSION --> API
+  C --> UI --> PLANVAL --> ENG --> A
+  API -. "future only" .-> QD
+  V -. "deferred" .-> API
+  T -. "deferred" .-> API
+  PII -. "future only" .-> LE
+  LE -. "future only" .-> OBSVAL
+  OBSVAL -. "future only" .-> REVIEW
+  REVIEW -. "future only" .-> SESSION
   REVIEW -. "phase two only, after review" .-> FUTURE
   FUTURE -. "future context" .-> API
 ```
@@ -89,7 +94,7 @@ See [the detailed architecture](docs/architecture.md).
 
 ## Why GPT-5.6 and Codex
 
-### Planned GPT-5.6 runtime
+### Future GPT-5.6 runtime
 
 - Uses object photos and parent-provided context to compose a constrained,
   developmentally appropriate moment or quest.
@@ -142,9 +147,9 @@ pnpm dev
 Open `http://localhost:3000` to run the complete seeded Kitchen Sound Detectives
 path. No environment file, login, API key, or external service is required.
 
-When live model integration starts, copy `.env.example` to `.env.local`, set
-`OPENAI_API_KEY`, and keep it server-side.
-See [`.env.example`](.env.example).
+The product owner has authorized a future server-only development key and a
+transient object-only upload boundary, but this branch deliberately adds neither
+a key, SDK, upload route, outbound call, nor deployment configuration.
 
 ## Framework checks
 
@@ -154,11 +159,13 @@ pnpm typecheck
 pnpm check
 ```
 
-The combined check passes under Node 24. Thirty-three tests cover the material,
+The combined check passes under Node 24. Thirty-eight tests cover the material,
 age-band, learning-focus and RummageTool safety contracts plus the seeded
 fixture, local material normalization and photo validation, session reducer,
-one-suggestion boundary, sound mixer, and rendered demo shell. Live API tests
-remain deferred because this slice adds no API.
+runtime request/response validation, malformed/timeout/mismatch fallbacks,
+content-free diagnostics, no-fetch seeded behavior, one-suggestion boundary,
+sound mixer, and rendered demo shell. Live API tests remain deferred because this
+slice adds no API.
 
 ## Seeded demo path
 

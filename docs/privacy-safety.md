@@ -25,6 +25,10 @@ review before a real launch.
 - Disable product analytics, advertising SDKs, and cross-site tracking for the
   demo. Do not place prompt, photo, audio, transcript, or observation content in
   application logs or error reports.
+- The runtime-contract seam may expose only operation, closed failure code,
+  fallback-used, and retryable fields. It must never put request content,
+  provider responses, error causes, filenames, prompts, or identifiers into
+  diagnostics, logs, analytics, or retry state.
 - Make object photos optional. In product copy, ask users to avoid faces and
   identifying documents; strip photo metadata and discard the object-only image
   after the one-time request.
@@ -76,7 +80,7 @@ not remove that responsibility.
 ## Location and weather
 
 Weather is optional. The hackathon shows **Anchorage, Alaska** as a visible,
-editable public demo default and may use it in a server-side weather lookup.
+editable public demo default; live weather lookup is deferred.
 Treat that value as application configuration, not a claim about where a child
 or family lives. Do not request device GPS, infer a child's precise location,
 associate the city with a child identity, or place the city or coordinates in

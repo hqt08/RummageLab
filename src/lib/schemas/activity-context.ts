@@ -11,17 +11,17 @@ const MaterialLabelSchema = z.string().trim().min(1).max(80);
 export const TypedMaterialInputSchema = z.object({
   source: z.literal("typed"),
   items: z.array(MaterialLabelSchema).min(1).max(5),
-});
+}).strict();
 
 export const PhotoMaterialInputSchema = z.object({
   source: z.literal("photo"),
   inventory: PhotoInventorySchema,
-});
+}).strict();
 
 export const SeededMaterialInputSchema = z.object({
   source: z.literal("seeded_demo"),
   fixtureId: z.literal("kitchen-sound-detectives"),
-});
+}).strict();
 
 /**
  * Raw input never becomes activity context by itself. Every route produces a
@@ -36,7 +36,7 @@ export const MaterialInputSchema = z.discriminatedUnion("source", [
 export const ConfirmedMaterialSchema = z.object({
   allowedMaterialCategory: AllowedMaterialCategorySchema,
   parentConfirmed: z.literal(true),
-});
+}).strict();
 
 export const WeatherTagSchema = z.enum([
   "sunny",
@@ -59,7 +59,7 @@ export const WeatherContextSchema = z.object({
   approvedTags: z.array(WeatherTagSchema).min(1).max(4),
   parentApproved: z.literal(true),
   preciseLocationStored: z.literal(false),
-});
+}).strict();
 
 /**
  * The complete, PII-free context allowed into an Experience Director request.

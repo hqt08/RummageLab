@@ -7,21 +7,20 @@ guides it. Models do not send executable code to a learner’s browser.
 
 ```mermaid
 flowchart TB
-  PHOTO["Optional object-only photo"] --> VISION["Vision analysis"]
+  PHOTO["Optional object-only photo"] -. "future adapter only" .-> VISION["Vision analysis"]
   VISION --> INVENTORY["Normalized allowed-material suggestions"]
   TYPED["Optional typed materials"] --> NORMALIZE["Transient text normalization<br/>and safety screening"]
   NORMALIZE --> INVENTORY
   INPUT["Age stage + time + setting"] --> DIRECTOR
   INVENTORY --> CONFIRM["Parent confirms items and safety"]
   CONFIRM --> DIRECTOR
-  CITY["Anchorage public demo default<br/>visible and editable"] --> WEATHER["Weather adapter suggests tags"]
-  WEATHER --> WEATHER_CONFIRM["Parent edits or approves tags"]
+  CITY["Anchorage public demo default<br/>visible and editable"] --> WEATHER_CONFIRM["Parent edits or approves tags"]
   MANUAL["Manual chips or seeded fallback tags"] --> WEATHER_CONFIRM
   WEATHER_CONFIRM --> DIRECTOR
   DEMO_CONTEXT["Seeded, no-login demo context"] --> DIRECTOR
   GOALS["Curated developmental-focus allowlist"] --> DIRECTOR
 
-  DIRECTOR["GPT-5.6 Experience Director"] --> JSON["Structured ExperienceSpec JSON"]
+  DIRECTOR["Future GPT-5.6 Experience Director"] --> JSON["Structured ExperienceSpec JSON"]
   JSON --> VALIDATE{"Zod + safety + developmental-focus validation"}
   VALIDATE -->|0–3| MOMENT["Adult-led RummageMoment script"]
   VALIDATE -->|3–6| RENDER["Deterministic React quest engine"]
@@ -31,8 +30,8 @@ flowchart TB
   TOOL --> ARTIFACT
   FALLBACK --> ARTIFACT
   ARTIFACT --> REFLECTION{"Leave an optional parent reflection?"}
-  REFLECTION -->|voice| TRANSCRIBE["Transient adult-memo transcription"]
-  REFLECTION -->|typed| SCREEN["Transient PII screen / redact"]
+  REFLECTION -. "deferred" .-> TRANSCRIBE["Transient adult-memo transcription"]
+  REFLECTION -. "deferred" .-> SCREEN["Transient PII screen / redact"]
   REFLECTION -->|skip| END["End activity<br/>no adaptive context"]
   TRANSCRIBE --> SCREEN
   SCREEN --> EXTRACT["GPT-5.6 observation extractor"]
@@ -100,21 +99,27 @@ profile, or permanent profile of the child.
 
 1. Render a parent-facing photo/camera shell immediately, with an explicit
    “objects only; no people” reminder.
-2. In a live flow, request a constrained `PhotoInventory` from the image. In the
-   seeded fallback, load the matching fixture. Both paths use the same schema.
-3. Typed materials and photo suggestions use the same material-confirmation and
+2. The implemented server-only runtime seam has provider-neutral `PhotoInventoryRequest` and
+   `ExperienceRequest` contracts. They omit raw bytes, typed text, filenames,
+   prompts, and provider payloads; a future server adapter owns transient upload
+   handling. The sole current provider is deterministic and seeded.
+3. In a future live flow, request a constrained `PhotoInventory` from an
+   object-only image. In the current seeded path, load the matching fixture.
+   Both paths use the same schema and require parent confirmation.
+4. Typed materials and photo suggestions use the same material-confirmation and
    safety path. Require parent confirmation before activity planning.
-4. Let the weather adapter suggest optional normalized tags, then require parent
-   edit or approval. Send only the approved tags to the Experience Director; do
-   not retain precise location, raw provider data, or the city in model context.
-5. Send one context-rich request for an `ExperienceSpec`; avoid a chain of model
+5. The current weather tags are prepared chips; a live weather adapter is
+   deferred. Only parent-approved broad tags could ever enter planning.
+6. A future adapter sends one context-rich request for an `ExperienceSpec`; avoid a chain of model
    calls before the child can begin.
-6. Validate the response and render the corresponding prebuilt component.
-7. Keep only minimum session-local experience state; use no database or durable
+7. Validate the response and its age, time, focus-ID, and confirmed-material
+   compatibility before rendering the corresponding prebuilt component. Malformed,
+   mismatched, unavailable, and timeout outcomes map to a content-free taxonomy
+   and a validated seeded fallback.
+8. Keep only minimum session-local experience state; use no database or durable
    child-related storage in the hackathon demo.
-8. Transcribe and analyze an opt-in adult memo after play, not on the critical
-   path. Raw audio is transient and deleted after transcription; typed notes
-   skip transcription. Screen transient text before observation extraction.
+9. Typed reflection and adult voice processing are deferred and remain off the
+   critical path until separately implemented and reviewed.
 
 ## Hackathon data posture
 
@@ -127,11 +132,11 @@ expiry, and additional privacy review.
 
 | Moment | Target behavior |
 | --- | --- |
-| Photo analysis | Immediate camera shell; seeded fixture is available when live analysis fails |
+| Photo inventory | Immediate local shell; deterministic seeded fixture and contract fallback are available |
 | Quest start | Immediate local shell and parent-confirmed materials checklist |
-| Model planning | One streaming request, with a playful progress state |
+| Runtime preview | Client-local deterministic state with visible loading, fallback, and retry; no runtime planner/network request |
 | Interactive tool | Local rendering; no model round-trip per tap |
-| Parent reflection | Optional background processing after a memo; typed notes are immediate |
+| Parent reflection | Prepared review only; typed reflection and voice are deferred |
 | Failure | Seeded or cached quest remains available |
 
 ## Phase two: teacher/parent Studio

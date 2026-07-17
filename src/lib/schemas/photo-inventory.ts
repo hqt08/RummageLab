@@ -10,7 +10,7 @@ export const PhotoInventoryItemSchema = z.object({
   suggestedLabel: z.string().min(1).max(80),
   allowedMaterialCategory: AllowedMaterialCategorySchema,
   needsParentConfirmation: z.literal(true),
-});
+}).strict();
 
 export const PhotoInventorySchema = z.object({
   imageMode: z.enum(["live", "seeded_demo"]),
@@ -18,6 +18,6 @@ export const PhotoInventorySchema = z.object({
   suggestedItems: z.array(PhotoInventoryItemSchema).min(1).max(5),
   unsafeOrUncertainNotice: z.string().min(1).max(240),
   requiresAdultSupervision: z.literal(true),
-});
+}).strict();
 
 export type PhotoInventory = z.infer<typeof PhotoInventorySchema>;

@@ -9,7 +9,7 @@ export const GuidedQuestAgeStageSchema = z.enum(["3-4y", "4-6y"]);
 export const QuestStepSchema = z.object({
   minute: z.number().int().min(0).max(15),
   instruction: z.string().min(1).max(280),
-});
+}).strict();
 
 /**
  * This is the only model-planned object that can reach the 3–6 learner renderer.
