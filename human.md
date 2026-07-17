@@ -1,0 +1,64 @@
+# Product-owner decision record
+
+These decisions define product scope and data handling. All current items are
+resolved. When a future material choice needs human direction, add it here as an
+unchecked item rather than silently assuming an answer.
+
+- [x] **Live demo learner:** A parent and their 3-year-old will be the demo
+      protagonists. The first planned activity is `Kitchen Sound Detectives`.
+- [x] **Age-banded product scope:** Confirmed parent-first 0–6 design:
+      caregiver moments for 0–3, picture/audio-led mini investigations for 3–4,
+      and short guided quests for 4–6. The hackathon implementation remains one
+      polished 3-year-old flow.
+- [x] **Tool name:** Confirmed **RummageTool** for all user-facing language.
+- [x] **Profile model:** Confirmed seeded, no-login parent context for the
+      hackathon. Persistent profiles and authentication are post-demo work.
+- [x] **Future preference memory:** Confirmed no persistence for the hackathon.
+      Any later memory is a parent-owned, PII-free, tag-only activity-preference
+      context with expiry, added only after a privacy review.
+- [x] **Reflection input:** Confirmed optional asynchronous parent voice memo
+      with an optional typed alternative. The child is never recorded; reflection
+      may be skipped entirely.
+- [x] **Material input:** Confirmed: parents can add everyday materials by
+      object-only photo or typed text. Both paths produce the same
+      parent-confirmed material inventory; a seeded Kitchen Sound Detectives
+      path remains available.
+- [x] **Photo showcase:** Confirmed: the recorded demo uses a fresh photo of
+      the real kitchen kit (objects only, never the child), while the public
+      judge path retains a clearly labeled curated fallback image.
+- [x] **Weather interaction:** Confirmed a visible, editable preset city for the
+      hackathon. A weather adapter may preselect broad condition tags, but the
+      parent must edit or approve them before activity planning. Manual chips
+      and a clearly labeled seeded fallback remain available. Only approved
+      tags—not the city or coordinates—enter activity or observation context.
+- [x] **Preset demo city:** Confirmed **Anchorage, Alaska** as the visible,
+      editable public demo default. Treat it as demo configuration, never as an
+      inferred or stored child/family location.
+- [x] **Hosting:** Confirmed a public hosted demo backed by the public GitHub
+      repository `hqt08/RummageLab`, with local execution retained as a backup.
+- [x] **Deployment provider:** Confirmed GitHub for source plus Vercel for the
+      public Next.js app. Production deploys from `main`; pull requests may use
+      seeded preview deployments without production credentials.
+- [x] **Public repository license:** Confirmed **Apache License 2.0** for the
+      RummageLab source code and documentation. This does not grant permission
+      to use RummageLab trademarks; demo media and third-party assets require
+      their own explicit rights or notices.
+- [x] **Copyright-holder label:** Confirmed **hqt08** for the hackathon-era
+      repository copyright notice. A later move to an LLC name is a separate,
+      explicit ownership and documentation decision; do not infer it from a
+      metadata change alone.
+- [x] **Public commit identity:** Confirmed repository-local Git author identity
+      `hqt08 <1230758+hqt08@users.noreply.github.com>` for the hackathon. This
+      may be changed prospectively to the LLC name and email after formation.
+- [x] **Verify the no-reply alias:** Confirmed in GitHub Settings → Emails that
+      `1230758+hqt08@users.noreply.github.com` is the account's private commit
+      address.
+- [x] **Create the GitHub remote:** Confirmed public repository
+      `hqt08/RummageLab`. GitHub created the first commit with the standard
+      Apache-2.0 `LICENSE`; its author uses the verified no-reply address, the
+      license matches the local copy exactly, and local `main` now tracks
+      `origin/main`. No scaffold commit has been pushed yet.
+- [x] **In-product Codex Studio:** Confirmed as a documented phase-two feature,
+      not part of the hackathon demo. For the hackathon, Codex remains a
+      build-time collaborator; GPT-5.6 selects a validated `RummageToolSpec`
+      that the app renders with approved, prebuilt components.

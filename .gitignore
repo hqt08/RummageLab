@@ -1,0 +1,37 @@
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+
+# Next.js
+/.next
+/out
+/.vercel
+*.tsbuildinfo
+.eslintcache
+
+# local environment files
+.env*
+!.env.example
+
+# local runtime data
+/uploads
+/tmp
+*.db
+*.sqlite
+*.sqlite3
+
+# private keys and certificates
+*.key
+*.pem
+*.p12
+*.pfx
+
+# test and diagnostic output
+/coverage
+/playwright-report
+/test-results
+*.log
+
+# editor / OS
+.DS_Store
