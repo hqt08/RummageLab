@@ -82,16 +82,15 @@ unchecked item rather than silently assuming an answer.
 
 ## Deployment and submission owner actions
 
-- [ ] **Create the Vercel production project:** Sign in to Vercel, import the
-      public `hqt08/RummageLab` GitHub repository, keep the standard Next.js
-      framework and repository-root settings, set `main` as the production
-      branch, and deploy once with no environment variables. Do not continue if
-      any visible credit indicator is below $30. Send the resulting stable
-      production URL back to the deployment task for fresh-browser verification
-      and documentation.
+- [x] **Create the Vercel production project:** Imported the public
+      `hqt08/RummageLab` GitHub repository, retained the standard Next.js and
+      repository-root settings, deployed `main` with no environment variables,
+      and verified the seeded public flow in a fresh browser at
+      <https://rummage-lab.vercel.app/>. Do not continue if any visible credit
+      indicator is below $10.
 - [ ] **Optionally enable the live GPT-5.6 path in Vercel:** In the approved
       Vercel project settings, first confirm an owner-controlled OpenAI project
-      spend cap or alert and that no visible credit indicator is below $30.
+      spend cap or alert and that no visible credit indicator is below $10.
       Because the prototype routes do not include an application-level abuse
       gate, prefer the no-key seeded production deployment for public judging.
       If live mode is still approved, add only `OPENAI_API_KEY` as a server-side

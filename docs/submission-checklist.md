@@ -5,6 +5,8 @@
 ### Complete and ready to use
 
 - **Public source:** <https://github.com/hqt08/RummageLab>
+- **Public demo:** <https://rummage-lab.vercel.app/> — deployed from `main`
+  without environment variables and verified in a fresh browser on 2026-07-17.
 - **English project description:** RummageLab helps parents turn safe everyday
   materials into short, developmentally appropriate moments of discovery for
   children ages 0–6. Its flagship Kitchen Sound Detectives demo uses GPT-5.6 to
@@ -24,8 +26,6 @@
 
 ### User-owned evidence still pending
 
-- **Public demo URL:** Create and verify the Vercel production project from
-  `main`, then record the stable URL here and in `README.md`.
 - **Core Codex evidence:** Run `/feedback` in the core build task and record the
   real Session ID in `README.md` and `docs/codex-decisions.md`.
 - **Video evidence:** Record, publish, and add the under-three-minute video URL.
@@ -34,7 +34,7 @@
 
 ## Product and testing
 
-- [ ] Public demo URL works in a fresh browser.
+- [x] Public demo URL works in a fresh browser.
 - [x] Seeded demo works without a model API key.
 - [x] Judge instructions are in the README; the seeded path needs no test credentials.
 - [x] README identifies the seeded sample data and gives testing instructions.
