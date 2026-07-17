@@ -111,6 +111,8 @@ const phaseProgress: Record<KitchenSoundDemoPhase, string> = {
   complete: "Case file 4 of 4 · All done",
 };
 
+type RuntimePreviewStatus = "idle" | "loading" | "fallback";
+
 function StageHeader({
   eyebrow,
   title,
@@ -148,11 +150,14 @@ export function KitchenSoundDemo() {
   const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
   const [photoFileName, setPhotoFileName] = useState("");
   const [photoError, setPhotoError] = useState<string | null>(null);
+  const [runtimePreviewStatus, setRuntimePreviewStatus] =
+    useState<RuntimePreviewStatus>("idle");
   const demoMainRef = useRef<HTMLElement>(null);
   const stageHeadingRef = useRef<HTMLHeadingElement>(null);
   const shouldFocusStageRef = useRef(false);
   const photoPreviewUrlRef = useRef<string | null>(null);
   const photoSelectionVersionRef = useRef(0);
+  const runtimeRequestVersionRef = useRef(0);
   const photoInputRef = useRef<HTMLInputElement>(null);
 
   const typedMaterialNormalization = useMemo(
@@ -187,6 +192,7 @@ export function KitchenSoundDemo() {
   useEffect(
     () => () => {
       photoSelectionVersionRef.current += 1;
+      runtimeRequestVersionRef.current += 1;
       releaseLocalPhotoPreview(photoPreviewUrlRef.current);
       photoPreviewUrlRef.current = null;
     },
@@ -206,6 +212,7 @@ export function KitchenSoundDemo() {
 
   function resetDemo() {
     photoSelectionVersionRef.current += 1;
+    runtimeRequestVersionRef.current += 1;
     releaseLocalPhotoPreview(photoPreviewUrlRef.current);
     photoPreviewUrlRef.current = null;
     shouldFocusStageRef.current = true;
@@ -216,6 +223,7 @@ export function KitchenSoundDemo() {
     setPhotoPreviewUrl(null);
     setPhotoFileName("");
     setPhotoError(null);
+    setRuntimePreviewStatus("idle");
     if (photoInputRef.current) {
       photoInputRef.current.value = "";
     }
@@ -345,13 +353,41 @@ export function KitchenSoundDemo() {
     );
   }
 
-  function startQuest() {
+  function startQuest(useUnavailableProvider = false) {
     if (!canStart) {
       return;
     }
+    const requestVersion = runtimeRequestVersionRef.current + 1;
+    runtimeRequestVersionRef.current = requestVersion;
+    setRuntimePreviewStatus("loading");
+    setAnnouncement("Preparing the validated seeded sound quest.");
+
+    window.setTimeout(() => {
+      if (runtimeRequestVersionRef.current !== requestVersion) {
+        return;
+      }
+      if (useUnavailableProvider) {
+        setRuntimePreviewStatus("fallback");
+        setAnnouncement(
+          "The prepared fallback is ready. No photo, typed text, or provider response was retained.",
+        );
+        return;
+      }
+
+      setRuntimePreviewStatus("idle");
+      if (state.materialSource === "typed") {
+        setTypedMaterialText("");
+      }
+      transitionDemo({ type: "START_QUEST" });
+    }, 280);
+  }
+
+  function openPreparedFallback() {
+    setRuntimePreviewStatus("idle");
     if (state.materialSource === "typed") {
       setTypedMaterialText("");
     }
+    setAnnouncement("Opening the prepared, validated fallback quest.");
     transitionDemo({ type: "START_QUEST" });
   }
 
@@ -822,14 +858,57 @@ export function KitchenSoundDemo() {
                 </p>
 
                 <div className="button-row">
-                  <button
-                    className="primary-button"
-                    disabled={!canStart}
-                    onClick={startQuest}
-                    type="button"
-                  >
-                    Make our sound quest
-                  </button>
+                  {runtimePreviewStatus === "idle" ? (
+                    <>
+                      <button
+                        className="primary-button"
+                        disabled={!canStart}
+                        onClick={() => startQuest()}
+                        type="button"
+                      >
+                        Make our sound quest
+                      </button>
+                      <button
+                        className="text-button"
+                        disabled={!canStart}
+                        onClick={() => startQuest(true)}
+                        type="button"
+                      >
+                        Preview fallback and retry
+                      </button>
+                    </>
+                  ) : null}
+                  {runtimePreviewStatus === "loading" ? (
+                    <p className="gate-note" role="status">
+                      Preparing the validated seeded sound quest. No network request is
+                      being made.
+                    </p>
+                  ) : null}
+                  {runtimePreviewStatus === "fallback" ? (
+                    <div className="runtime-fallback" role="alert">
+                      <p>
+                        The planner was unavailable, so a prepared safe fallback is
+                        ready. No photo, typed text, or provider response is shown or
+                        logged.
+                      </p>
+                      <div className="button-row">
+                        <button
+                          className="primary-button"
+                          onClick={openPreparedFallback}
+                          type="button"
+                        >
+                          Open prepared fallback
+                        </button>
+                        <button
+                          className="secondary-button"
+                          onClick={() => startQuest()}
+                          type="button"
+                        >
+                          Retry seeded planner
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               </section>
             </div>

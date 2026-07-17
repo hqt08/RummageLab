@@ -1,4 +1,5 @@
 export * from "./activity-context";
+export * from "./experience-spec";
 export * from "./material-category";
 export * from "./parent-reflection";
 export * from "./photo-inventory";

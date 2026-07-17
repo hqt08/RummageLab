@@ -63,7 +63,10 @@ unchecked item rather than silently assuming an answer.
       not part of the hackathon demo. For the hackathon, Codex remains a
       build-time collaborator; GPT-5.6 selects a validated `RummageToolSpec`
       that the app renders with approved, prebuilt components.
-- [ ] **Live OpenAI runtime authorization:** Before adding a networked photo or
-      reflection adapter, approve a server-only development API key and the
-      transient object-only upload boundary. Production credentials and public
-      deployment remain separate approvals.
+- [x] **Runtime seam authorization:** A future real GPT-5.6 photo-to-activity
+      vertical slice may use a server-only development API key and a transient,
+      object-only upload boundary. This authorizes neither adding a key nor an
+      SDK, outbound call, upload route, persistence, analytics, deployment,
+      reflection, or voice in this slice. Production credentials and public
+      deployment remain separate approvals; PWA work, live weather, optional
+      typed reflection, and voice are deferred.
