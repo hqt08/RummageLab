@@ -9,13 +9,16 @@ import {
   KITCHEN_SOUND_REQUIRED_MATERIALS,
   KITCHEN_SOUND_SUGGESTED_WEATHER_TAGS,
   buildReviewedObservationSuggestion,
-  createKitchenSoundActivityContext,
   createKitchenSoundNextSuggestion,
   kitchenSoundObservationFixture,
   type DemoObservationTag,
   type DemoWeatherTag,
   type KitchenSoundNextSuggestion,
 } from "./kitchen-sound-detectives";
+import {
+  canStartApprovedQuest,
+  createApprovedActivityContext,
+} from "./approved-quest-templates";
 import type { MaterialIntakeSource } from "./material-intake";
 
 export type KitchenSoundDemoPhase =
@@ -121,30 +124,16 @@ function toggleValue<T>(values: readonly T[], value: T): T[] {
     : [...values, value];
 }
 
-function hasExactMaterialKit(
-  materials: readonly AllowedMaterialCategory[],
-): boolean {
-  const selected = new Set(materials);
-
-  return (
-    materials.length === KITCHEN_SOUND_REQUIRED_MATERIALS.length &&
-    selected.size === KITCHEN_SOUND_REQUIRED_MATERIALS.length &&
-    KITCHEN_SOUND_REQUIRED_MATERIALS.every((material) => selected.has(material))
-  );
-}
-
 export function canStartKitchenSoundQuest(
   state: KitchenSoundDemoState,
 ): boolean {
-  return (
-    state.phase === "kit_review" &&
-    hasExactMaterialKit(state.confirmedMaterials) &&
-    hasExactMaterialKit(state.intakeCandidateMaterials) &&
-    state.selectedWeatherTags.length >= 1 &&
-    state.selectedWeatherTags.length <= 4 &&
-    state.parentApprovedWeather &&
-    state.parentConfirmedSafety
-  );
+  return state.phase === "kit_review" && canStartApprovedQuest({
+    confirmedMaterials: state.confirmedMaterials,
+    intakeCandidateMaterials: state.intakeCandidateMaterials,
+    approvedWeatherTags: state.selectedWeatherTags,
+    parentApprovedWeather: state.parentApprovedWeather,
+    parentConfirmedSafety: state.parentConfirmedSafety,
+  });
 }
 
 function makeObservationDraft(): ObservationDraft {
@@ -224,11 +213,7 @@ export function kitchenSoundDemoReducer(
       return state.phase === "kit_review"
         ? {
             ...state,
-            intakeCandidateMaterials: action.materials.filter((material) =>
-              KITCHEN_SOUND_REQUIRED_MATERIALS.some(
-                (requiredMaterial) => requiredMaterial === material,
-              ),
-            ),
+            intakeCandidateMaterials: [...new Set(action.materials)],
             confirmedMaterials: [],
             parentConfirmedSafety: false,
             activityContext: null,
@@ -304,7 +289,7 @@ export function kitchenSoundDemoReducer(
         return state;
       }
 
-      const activityContext = createKitchenSoundActivityContext({
+      const activityContext = createApprovedActivityContext({
         materialSource: state.materialSource,
         confirmedMaterials: state.confirmedMaterials,
         approvedWeatherTags: state.selectedWeatherTags,

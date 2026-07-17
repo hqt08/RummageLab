@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  guardTypedObjectLabels,
   LOCAL_OBJECT_PHOTO_MAX_BYTES,
   LOCAL_OBJECT_PHOTO_MAX_PIXELS,
   createLocalPhotoPreview,
@@ -27,15 +28,17 @@ describe("typed material intake", () => {
     expect(result.excluded).toEqual([]);
   });
 
-  it("keeps unsafe, unknown, contact-like, and off-quest items out", () => {
+  it("keeps unsafe, unknown, and contact-like items out while retaining other approved categories", () => {
     const result = normalizeKitchenSoundTypedMaterials(
-      "coin, silicone spatula, mystery widget, parent@example.com",
+      "coin, silicone spatula, soft ball, mystery widget, parent@example.com",
     );
 
-    expect(result.accepted).toEqual([]);
+    expect(result.accepted.map((item) => item.category)).toEqual([
+      "silicone_kitchen_utensil",
+      "large_soft_ball",
+    ]);
     expect(result.excluded.map((item) => item.reason)).toEqual([
       "unsafe",
-      "not_for_this_quest",
       "unknown",
       "private_information",
     ]);
@@ -61,6 +64,21 @@ describe("typed material intake", () => {
       "large_empty_plastic_container",
     );
     expect(result.missing).toContain("large_empty_plastic_container");
+  });
+
+  it("guards transient live labels before they can leave the browser", () => {
+    expect(guardTypedObjectLabels("duck\nball")).toEqual({
+      safe: true,
+      objectLabels: ["duck", "ball"],
+    });
+    expect(guardTypedObjectLabels("my-school address")).toMatchObject({
+      safe: false,
+      code: "private_information",
+    });
+    expect(guardTypedObjectLabels("coin")).toMatchObject({
+      safe: false,
+      code: "unsafe",
+    });
   });
 });
 

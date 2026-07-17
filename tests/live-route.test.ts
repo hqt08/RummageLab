@@ -2,10 +2,7 @@ import sharp from "sharp";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { GET, POST } from "../src/app/api/live-experience/route";
-import {
-  kitchenSoundActivityContext,
-  kitchenSoundQuest,
-} from "../src/lib/demo/kitchen-sound-detectives";
+import { kitchenSoundActivityContext } from "../src/lib/demo/kitchen-sound-detectives";
 
 const originalKey = process.env.OPENAI_API_KEY;
 const originalLiveSwitch = process.env.RUMMAGELAB_LIVE_OPENAI_ENABLED;
@@ -162,12 +159,53 @@ describe("live experience API route", () => {
   it("keeps live JSON planning available only when both capability settings are present", async () => {
     process.env.OPENAI_API_KEY = "test-key";
     process.env.RUMMAGELAB_LIVE_OPENAI_ENABLED = "true";
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(providerResponse(kitchenSoundQuest));
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(providerResponse({ templateId: "kitchen-sound-detectives" }));
     const response = await POST(new Request("http://local/api/live-experience", {
       method: "POST", headers: { "content-type": "application/json" },
       body: JSON.stringify({ operation: "experience_selection", fixtureId: "kitchen-sound-detectives", activityContext: kitchenSoundActivityContext }),
     }));
     expect((await response.json()).runtime.source).toBe("live_provider");
     expect(fetchSpy).toHaveBeenCalledOnce();
+  });
+
+  it("maps bounded safe typed labels live and blocks unsafe labels before the provider", async () => {
+    process.env.OPENAI_API_KEY = "test-key";
+    process.env.RUMMAGELAB_LIVE_OPENAI_ENABLED = "true";
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(providerResponse({
+      imageMode: "live", objectOnlyReminder: true, requiresAdultSupervision: true,
+      unsafeOrUncertainNotice: "Confirm each category.",
+      suggestedItems: [{ suggestedLabel: "Large soft ball", allowedMaterialCategory: "large_soft_ball", needsParentConfirmation: true }],
+    }));
+    const response = await POST(new Request("http://local/api/live-experience", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ operation: "typed_object_inventory", objectLabels: ["ball"] }),
+    }));
+    expect((await response.json()).runtime.source).toBe("live_provider");
+    expect(fetchSpy).toHaveBeenCalledOnce();
+
+    fetchSpy.mockClear();
+    const rejected = await POST(new Request("http://local/api/live-experience", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ operation: "typed_object_inventory", objectLabels: ["school address"] }),
+    }));
+    expect(rejected.status).toBe(400);
+    expect((await rejected.json()).error.code).toBe("unsafe_typed_object_labels");
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("fails typed mapping without substituting the unrelated kitchen fixture", async () => {
+    process.env.OPENAI_API_KEY = "test-key";
+    process.env.RUMMAGELAB_LIVE_OPENAI_ENABLED = "true";
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("rate limited", { status: 429 }));
+
+    const response = await POST(new Request("http://local/api/live-experience", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ operation: "typed_object_inventory", objectLabels: ["soft ball"] }),
+    }));
+    const body = await response.json();
+
+    expect(response.status).toBe(503);
+    expect(body).toEqual({ error: { code: "live_typed_mapping_unavailable" } });
+    expect(JSON.stringify(body)).not.toContain("kitchen");
   });
 });

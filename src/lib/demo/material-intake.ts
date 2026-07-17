@@ -112,12 +112,15 @@ const acceptedAliases: Record<string, TypedMaterialMatch> = {
   },
 };
 
-const otherAllowedAliases: Record<string, string> = {
-  "board book": "Board book",
-  cardboard: "Paper or cardboard",
-  paper: "Paper or cardboard",
-  "silicone spatula": "Silicone kitchen utensil",
-  "soft ball": "Large soft ball",
+const otherAllowedAliases: Record<string, TypedMaterialMatch> = {
+  "board book": { category: "board_book", displayLabel: "Board book" },
+  cardboard: { category: "paper_or_cardboard", displayLabel: "Paper or cardboard" },
+  paper: { category: "paper_or_cardboard", displayLabel: "Paper or cardboard" },
+  "paper cup": { category: "paper_or_cardboard", displayLabel: "Paper cup" },
+  "silicone spatula": { category: "silicone_kitchen_utensil", displayLabel: "Silicone kitchen utensil" },
+  "soft ball": { category: "large_soft_ball", displayLabel: "Large soft ball" },
+  "large soft ball": { category: "large_soft_ball", displayLabel: "Large soft ball" },
+  "soccer ball": { category: "large_soft_ball", displayLabel: "Large soft ball" },
 };
 
 const unsafeWords = new Set([
@@ -147,7 +150,8 @@ function looksLikePrivateInformation(value: string): boolean {
     /\b[^\s@]+@[^\s@]+\.[^\s@]+\b/i.test(value) ||
     /\b(?:\+?1[\s.-]?)?(?:\(?\d{3}\)?[\s.-]?)\d{3}[\s.-]?\d{4}\b/.test(
       value,
-    )
+    ) ||
+    /\b(?:school|daycare|preschool|kindergarten|address|apartment|street|avenue|road)\b/i.test(value)
   );
 }
 
@@ -155,6 +159,26 @@ function containsUnsafeWord(value: string): boolean {
   return normalizeLabel(value)
     .split(" ")
     .some((word) => unsafeWords.has(word));
+}
+
+/**
+ * Shared client/server boundary for transient labels sent to the optional live
+ * mapper. It rejects likely PII and known young-child hazards before a model
+ * request, but is not presented as perfect PII detection.
+ */
+export function guardTypedObjectLabels(rawInput: string):
+  | { safe: true; objectLabels: string[] }
+  | { safe: false; code: "empty" | "too_many" | "too_long" | "private_information" | "unsafe" } {
+  const objectLabels = rawInput
+    .split(/[\n,]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  if (objectLabels.length === 0) return { safe: false, code: "empty" };
+  if (objectLabels.length > 5) return { safe: false, code: "too_many" };
+  if (objectLabels.some((item) => item.length > 80)) return { safe: false, code: "too_long" };
+  if (objectLabels.some(looksLikePrivateInformation)) return { safe: false, code: "private_information" };
+  if (objectLabels.some(containsUnsafeWord)) return { safe: false, code: "unsafe" };
+  return { safe: true, objectLabels };
 }
 
 export function validateLocalObjectPhoto(file: {
@@ -334,13 +358,9 @@ export function normalizeKitchenSoundTypedMaterials(
       continue;
     }
 
-    const otherAllowedLabel = otherAllowedAliases[normalized];
-    if (otherAllowedLabel) {
-      excluded.push({
-        inputLabel: otherAllowedLabel,
-        reason: "not_for_this_quest",
-        message: "Recognized, but not used by Kitchen Sound Detectives.",
-      });
+    const otherAllowedMatch = otherAllowedAliases[normalized];
+    if (otherAllowedMatch) {
+      acceptedByCategory.set(otherAllowedMatch.category, otherAllowedMatch);
       continue;
     }
 

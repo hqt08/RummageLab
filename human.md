@@ -82,13 +82,18 @@ unchecked item rather than silently assuming an answer.
 
 ## Deployment and submission owner actions
 
+- [x] **Renew GitHub CLI authentication before publishing the live activity update:**
+      Confirmed `gh auth status` shows `hqt08` authenticated with the HTTPS
+      protocol before publishing. No API key or Vercel value was needed for
+      this repository-authentication step.
+
 - [x] **Create the Vercel production project:** Imported the public
       `hqt08/RummageLab` GitHub repository, retained the standard Next.js and
       repository-root settings, deployed `main` with no environment variables,
       and verified the seeded public flow in a fresh browser at
       <https://rummage-lab.vercel.app/>. Do not continue if any visible credit
       indicator is below $10.
-- [ ] **Optionally enable the live GPT-5.6 path in Vercel:** In the approved
+- [x] **Optionally enable the live GPT-5.6 path in Vercel:** In the approved
       Vercel project settings, first confirm that no visible credit indicator is
       below $10. A strict $10 spend cap cannot be guaranteed by this stateless
       app or an OpenAI project monthly budget, which is a soft threshold.
@@ -102,7 +107,7 @@ unchecked item rather than silently assuming an answer.
       billing limit. Do not paste the value into source, chat, build logs,
       preview settings, or a `NEXT_PUBLIC_` variable. The public seeded path
       must continue to work without these variables.
-- [ ] **Record real Codex evidence:** In the core build task, run `/feedback`
+- [x] **Record real Codex evidence:** In the core build task, run `/feedback`
       and replace the `TBD` core Session ID in `README.md` and
       `docs/codex-decisions.md`. Never invent or reuse an unrelated ID.
 - [ ] **Finish submission-owned evidence:** Capture the under-three-minute

@@ -114,6 +114,21 @@ describe("Kitchen Sound Detectives confirmation gates", () => {
     expect(started.activityContext?.materialSource).toBe("typed");
   });
 
+  it("accepts a parent-confirmed large soft ball only after current intake, weather, and safety gates", () => {
+    const ballReady = reduce(
+      kitchenSoundDemoReducer(createInitialKitchenSoundDemoState(), { type: "SET_MATERIAL_SOURCE", source: "photo" }),
+      { type: "SET_MATERIAL_CANDIDATES", materials: ["large_soft_ball"] },
+      { type: "TOGGLE_MATERIAL", material: "large_soft_ball" },
+      { type: "SET_WEATHER_APPROVED", approved: true },
+      { type: "SET_SAFETY_CONFIRMED", confirmed: true },
+    );
+    expect(canStartKitchenSoundQuest(ballReady)).toBe(true);
+    const started = kitchenSoundDemoReducer(ballReady, { type: "START_QUEST" });
+    expect(started.activityContext?.confirmedMaterials).toEqual([
+      { allowedMaterialCategory: "large_soft_ball", parentConfirmed: true },
+    ]);
+  });
+
   it("cannot start photo or typed provenance without a current intake result", () => {
     for (const source of ["photo", "typed"] as const) {
       const sourceChanged = kitchenSoundDemoReducer(readyKitState(), {

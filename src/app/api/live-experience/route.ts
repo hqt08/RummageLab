@@ -24,6 +24,7 @@ import {
   kitchenSoundPhotoInventory,
 } from "../../../lib/demo/kitchen-sound-detectives";
 import { ActivityContextSchema } from "../../../lib/schemas";
+import { guardTypedObjectLabels } from "../../../lib/demo/material-intake";
 
 export const runtime = "nodejs";
 
@@ -32,6 +33,13 @@ const ExperienceBodySchema = z.object({
   fixtureId: z.literal("kitchen-sound-detectives"),
   activityContext: ActivityContextSchema,
 }).strict();
+
+const TypedObjectInventoryBodySchema = z.object({
+  operation: z.literal("typed_object_inventory"),
+  objectLabels: z.array(z.string().min(1).max(80)).min(1).max(5),
+}).strict();
+
+const JsonBodySchema = z.union([ExperienceBodySchema, TypedObjectInventoryBodySchema]);
 
 const MAX_REQUEST_BYTES = 9 * 1024 * 1024;
 const MAX_JSON_BYTES = 64 * 1024;
@@ -93,6 +101,9 @@ export async function POST(request: Request) {
       return NextResponse.json(PhotoInventoryResponseSchema.parse(disabledPhotoInventoryResponse()));
     }
     if (/^application\/json(?:;|$)/i.test(contentType)) {
+      if (request.headers.get("x-rummagelab-operation") === "typed_object_inventory") {
+        return NextResponse.json(PhotoInventoryResponseSchema.parse(disabledPhotoInventoryResponse()));
+      }
       return NextResponse.json(ExperienceResponseSchema.parse(disabledExperienceResponse({
         fixtureId: "kitchen-sound-detectives",
         activityContext: kitchenSoundActivityContext,
@@ -161,7 +172,33 @@ export async function POST(request: Request) {
   if (!/^application\/json(?:;|$)/i.test(contentType)) return invalidRequest("unsupported_content_type", 415);
   try {
     const raw = await readBoundedJson(request);
-    const body = ExperienceBodySchema.parse(raw);
+    const body = JsonBodySchema.parse(raw);
+    if (body.operation === "typed_object_inventory") {
+      const guarded = guardTypedObjectLabels(body.objectLabels.join("\n"));
+      if (!guarded.safe) return invalidRequest("unsafe_typed_object_labels");
+      try {
+        const provider = createOpenAIExperienceProvider({
+          apiKey: capability.apiKey,
+          transientImage: { mimeType: "image/jpeg", base64: "" },
+        });
+        const inventory = validateLivePhotoInventory(await provider.getPhotoInventory({
+          mode: "live_typed_object_labels",
+          ageStage: "3-4y",
+          objectLabels: guarded.objectLabels,
+        }));
+        return NextResponse.json(PhotoInventoryResponseSchema.parse({
+          inventory,
+          runtime: { source: "live_provider" },
+        }));
+      } catch (error) {
+        // Typed input has its own browser-side bounded allowlist. Never replace
+        // the parent's labels with the unrelated Kitchen Sound fixture when the
+        // live mapper is unavailable; a content-free 503 lets the client retain
+        // its local candidates instead.
+        runtimeDiagnostic("typed_object_inventory", error);
+        return invalidRequest("live_typed_mapping_unavailable", 503);
+      }
+    }
     const provider = createOpenAIExperienceProvider({
       apiKey: capability.apiKey,
       transientImage: { mimeType: "image/jpeg", base64: "" },

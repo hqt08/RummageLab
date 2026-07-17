@@ -114,7 +114,7 @@ See [the detailed architecture](docs/architecture.md).
 
 ### Codex collaboration
 
-- **Core `/feedback` Session ID:** `TBD — record before submission`
+- **Core `/feedback` Session ID:** `019f6671-c7e4-7cc1-af9a-1bc7b21370af`
 - **Codex accelerated:** project scaffolding, interaction design, schemas,
   tests, documentation, and code review.
 - **Human decisions:** learner scope, standards allowlist, safety/privacy

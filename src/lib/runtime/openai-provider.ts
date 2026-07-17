@@ -3,7 +3,11 @@ import {
   PhotoInventoryRequestSchema,
   type ExperienceRuntimeProvider,
 } from "./contracts";
-import { parseKitchenSoundQuest } from "../demo/kitchen-sound-detectives";
+import {
+  ApprovedQuestTemplateSelectionSchema,
+  availableApprovedQuestTemplateIds,
+  resolveApprovedQuestTemplate,
+} from "../demo/approved-quest-templates";
 import { PhotoInventorySchema } from "../schemas";
 import { RuntimeProviderFailure } from "./seeded-runtime";
 
@@ -69,49 +73,25 @@ const PHOTO_INVENTORY_JSON_SCHEMA = {
   },
 } as const;
 
-const EXPERIENCE_JSON_SCHEMA = {
+const EXPERIENCE_TEMPLATE_JSON_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: [
-    "id", "title", "experienceMode", "ageStage", "developmentalFocusIds",
-    "parentFacingGoal", "materials", "adultSafetyNote", "stopIf", "steps",
-    "evidencePrompt", "parentReflectionPrompt", "tool", "fallbackMessage",
-  ],
+  required: ["templateId"],
   properties: {
-    id: { type: "string", const: "kitchen-sound-detectives" },
-    title: { type: "string", minLength: 1, maxLength: 100 },
-    experienceMode: { type: "string", const: "guided_quest" },
-    ageStage: { type: "string", const: "3-4y" },
-    developmentalFocusIds: { type: "array", minItems: 1, maxItems: 4, items: { type: "string", minLength: 1, maxLength: 80 } },
-    parentFacingGoal: { type: "string", minLength: 1, maxLength: 240 },
-    materials: { type: "array", minItems: 1, maxItems: 5, items: PHOTO_INVENTORY_JSON_SCHEMA.properties.suggestedItems.items.properties.allowedMaterialCategory },
-    adultSafetyNote: { type: "string", minLength: 1, maxLength: 280 },
-    stopIf: { type: "array", minItems: 1, maxItems: 4, items: { type: "string", minLength: 1, maxLength: 160 } },
-    steps: {
-      type: "array", minItems: 2, maxItems: 6,
-      items: {
-        type: "object", additionalProperties: false, required: ["minute", "instruction"],
-        properties: { minute: { type: "integer", minimum: 0, maximum: 15 }, instruction: { type: "string", minLength: 1, maxLength: 280 } },
-      },
-    },
-    evidencePrompt: { type: "string", minLength: 1, maxLength: 240 },
-    parentReflectionPrompt: { type: "string", minLength: 1, maxLength: 240 },
-    tool: {
-      type: "object", additionalProperties: false,
-      required: ["kind", "title", "prompt", "accessibilityHint", "soundLabels"],
-      properties: {
-        kind: { type: "string", const: "sound_mix" },
-        title: { type: "string", minLength: 1, maxLength: 80 },
-        prompt: { type: "string", minLength: 1, maxLength: 240 },
-        accessibilityHint: { type: "string", minLength: 1, maxLength: 180 },
-        soundLabels: { type: "array", minItems: 2, maxItems: 4, items: { type: "string", minLength: 1, maxLength: 40 } },
-      },
-    },
-    fallbackMessage: { type: "string", minLength: 1, maxLength: 240 },
+    templateId: { type: "string", enum: ["kitchen-sound-detectives", "ball-roll-predictions", "everyday-object-noticing"] },
   },
 } as const;
 
 type ResponsesBody = { output?: Array<{ type?: string; content?: Array<{ type?: string; text?: string }> }> };
+
+function recordProviderHttpFailure(response: Response) {
+  // Deliberately operational-only: never log the request, prompt, labels,
+  // image, provider body, authorization header, or any user content.
+  console.warn("rummagelab_openai_http_failure", {
+    status: response.status,
+    requestId: response.headers.get("x-request-id") ?? response.headers.get("request-id") ?? null,
+  });
+}
 
 function outputText(body: ResponsesBody): string {
   const text = body.output?.flatMap((item) => item.content ?? []).find((item) => item.type === "output_text")?.text;
@@ -151,7 +131,10 @@ export function createOpenAIExperienceProvider(
         }),
         signal: controller.signal,
       });
-      if (!response.ok) throw new RuntimeProviderFailure("provider_unavailable");
+      if (!response.ok) {
+        recordProviderHttpFailure(response);
+        throw new RuntimeProviderFailure("provider_http_error");
+      }
       let body: ResponsesBody;
       try {
         body = (await response.json()) as ResponsesBody;
@@ -180,7 +163,24 @@ export function createOpenAIExperienceProvider(
   return {
     async getPhotoInventory(request) {
       const parsed = PhotoInventoryRequestSchema.parse(request);
-      if (parsed.mode !== "live_transient_object_upload" || parsed.ageStage !== "3-4y") {
+      if (parsed.ageStage !== "3-4y") {
+        throw new RuntimeProviderFailure("provider_context_mismatch");
+      }
+      if (parsed.mode === "live_typed_object_labels") {
+        const result = PhotoInventorySchema.parse(await requestStructured(
+          "typed_object_inventory",
+          PHOTO_INVENTORY_JSON_SCHEMA,
+          [{
+            type: "input_text",
+            text: `Map only these transient, parent-entered everyday-object labels to the allowed categories. Do not repeat labels, infer identity, determine safety, or introduce objects. Every suggestion requires parent confirmation. Labels: ${JSON.stringify(parsed.objectLabels)}`,
+          }],
+        ));
+        if (result.imageMode !== "live" || new Set(result.suggestedItems.map((item) => item.allowedMaterialCategory)).size !== result.suggestedItems.length) {
+          throw new RuntimeProviderFailure("provider_malformed_response");
+        }
+        return result;
+      }
+      if (parsed.mode !== "live_transient_object_upload") {
         throw new RuntimeProviderFailure("provider_context_mismatch");
       }
       const result = PhotoInventorySchema.parse(await requestStructured(
@@ -198,12 +198,14 @@ export function createOpenAIExperienceProvider(
     },
     async selectExperience(request) {
       const parsed = ExperienceRequestSchema.parse(request);
-      const result = await requestStructured(
-        "kitchen_sound_experience",
-        EXPERIENCE_JSON_SCHEMA,
-        [{ type: "input_text", text: `Create the Kitchen Sound Detectives parent-led activity using only this validated parent-approved context: ${JSON.stringify(parsed.activityContext)}` }],
-      );
-      return parseKitchenSoundQuest(result, parsed.activityContext);
+      const allowedTemplateIds = availableApprovedQuestTemplateIds(parsed.activityContext);
+      if (allowedTemplateIds.length === 0) throw new RuntimeProviderFailure("provider_context_mismatch");
+      const result = ApprovedQuestTemplateSelectionSchema.parse(await requestStructured(
+        "reviewed_activity_template_selection",
+        EXPERIENCE_TEMPLATE_JSON_SCHEMA,
+        [{ type: "input_text", text: `Select exactly one reviewed activity template ID from ${JSON.stringify(allowedTemplateIds)} for this already validated, parent-approved context. Do not create instructions, objects, or a new template. Context: ${JSON.stringify(parsed.activityContext)}` }],
+      ));
+      return resolveApprovedQuestTemplate(result, parsed.activityContext);
     },
   };
 }

@@ -6,6 +6,7 @@ import {
   kitchenSoundPhotoInventory,
   kitchenSoundQuest,
 } from "../src/lib/demo/kitchen-sound-detectives";
+import { createApprovedActivityContext } from "../src/lib/demo/approved-quest-templates";
 import { RuntimeProviderFailure } from "../src/lib/runtime/seeded-runtime";
 import { createOpenAIExperienceProvider } from "../src/lib/runtime/openai-provider";
 
@@ -63,6 +64,33 @@ describe("OpenAI server-only experience provider", () => {
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
+  it("maps bounded typed object labels into the same constrained inventory contract", async () => {
+    const liveInventory = { ...kitchenSoundPhotoInventory, imageMode: "live" as const };
+    const fetchImpl = vi.fn(async () => responseFor(liveInventory)) as unknown as typeof fetch;
+    await expect(provider(fetchImpl).getPhotoInventory({
+      mode: "live_typed_object_labels", ageStage: "3-4y", objectLabels: ["duck", "soft ball"],
+    })).resolves.toEqual(liveInventory);
+    const body = JSON.parse(String((fetchImpl as unknown as ReturnType<typeof vi.fn>).mock.calls[0]?.[1]?.body));
+    expect(body.text.format.name).toBe("typed_object_inventory");
+    expect(body.store).toBe(false);
+    expect(JSON.stringify(body)).toContain("duck");
+  });
+
+  it("records only status and request id for a non-OK provider response", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const fetchImpl = vi.fn(async () => new Response("private provider body", {
+      status: 429,
+      headers: { "x-request-id": "req_safe_id" },
+    })) as unknown as typeof fetch;
+    await expect(provider(fetchImpl).getPhotoInventory({
+      mode: "live_typed_object_labels", ageStage: "3-4y", objectLabels: ["ball"],
+    })).rejects.toMatchObject({ code: "provider_http_error" });
+    expect(warnSpy).toHaveBeenCalledWith("rummagelab_openai_http_failure", {
+      status: 429, requestId: "req_safe_id",
+    });
+    expect(JSON.stringify(warnSpy.mock.calls)).not.toContain("private provider body");
+  });
+
   it("strictly rejects malformed, duplicate, and non-live inventories", async () => {
     const badOutputs = [
       { ...kitchenSoundPhotoInventory, imageMode: "seeded_demo" },
@@ -77,13 +105,31 @@ describe("OpenAI server-only experience provider", () => {
     }
   });
 
-  it("validates an experience against the parent-approved context", async () => {
-    const fetchImpl = vi.fn(async () => responseFor(kitchenSoundQuest)) as unknown as typeof fetch;
+  it("selects only a reviewed template that matches the parent-approved context", async () => {
+    const fetchImpl = vi.fn(async () => responseFor({ templateId: "kitchen-sound-detectives" })) as unknown as typeof fetch;
     await expect(provider(fetchImpl).selectExperience({ activityContext: context })).resolves.toEqual(kitchenSoundQuest);
 
-    const unsafe = { ...kitchenSoundQuest, materials: ["board_book"] };
+    const unsafe = { templateId: "ball-roll-predictions" };
     const unsafeFetch = vi.fn(async () => responseFor(unsafe)) as unknown as typeof fetch;
-    await expect(provider(unsafeFetch).selectExperience({ activityContext: context })).rejects.toThrow(/not parent-confirmed/);
+    await expect(provider(unsafeFetch).selectExperience({ activityContext: context })).rejects.toThrow(/does not match/);
+  });
+
+  it("dispatches reviewed ball and generic templates without model-authored learner UI", async () => {
+    const ballContext = createApprovedActivityContext({
+      materialSource: "photo", confirmedMaterials: ["large_soft_ball"], approvedWeatherTags: ["rainy"], parentConfirmedSafety: true,
+    });
+    const ballFetch = vi.fn(async () => responseFor({ templateId: "ball-roll-predictions" })) as unknown as typeof fetch;
+    await expect(provider(ballFetch).selectExperience({ activityContext: ballContext })).resolves.toMatchObject({
+      id: "ball-roll-predictions", tool: { kind: "predict" },
+    });
+
+    const genericContext = createApprovedActivityContext({
+      materialSource: "typed", confirmedMaterials: ["board_book"], approvedWeatherTags: ["rainy"], parentConfirmedSafety: true,
+    });
+    const genericFetch = vi.fn(async () => responseFor({ templateId: "everyday-object-noticing" })) as unknown as typeof fetch;
+    await expect(provider(genericFetch).selectExperience({ activityContext: genericContext })).resolves.toMatchObject({
+      id: "everyday-object-noticing", materials: ["board_book"], tool: { kind: "predict" },
+    });
   });
 
   it("maps transport and provider response failures to closed errors", async () => {
