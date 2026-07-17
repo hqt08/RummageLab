@@ -191,13 +191,12 @@ export async function POST(request: Request) {
           runtime: { source: "live_provider" },
         }));
       } catch (error) {
-        return NextResponse.json(PhotoInventoryResponseSchema.parse({
-          inventory: kitchenSoundPhotoInventory,
-          runtime: {
-            source: "seeded_fallback",
-            diagnostic: runtimeDiagnostic("typed_object_inventory", error),
-          },
-        }));
+        // Typed input has its own browser-side bounded allowlist. Never replace
+        // the parent's labels with the unrelated Kitchen Sound fixture when the
+        // live mapper is unavailable; a content-free 503 lets the client retain
+        // its local candidates instead.
+        runtimeDiagnostic("typed_object_inventory", error);
+        return invalidRequest("live_typed_mapping_unavailable", 503);
       }
     }
     const provider = createOpenAIExperienceProvider({

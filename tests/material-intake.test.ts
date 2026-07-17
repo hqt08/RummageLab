@@ -28,15 +28,17 @@ describe("typed material intake", () => {
     expect(result.excluded).toEqual([]);
   });
 
-  it("keeps unsafe, unknown, contact-like, and off-quest items out", () => {
+  it("keeps unsafe, unknown, and contact-like items out while retaining other approved categories", () => {
     const result = normalizeKitchenSoundTypedMaterials(
-      "coin, silicone spatula, mystery widget, parent@example.com",
+      "coin, silicone spatula, soft ball, mystery widget, parent@example.com",
     );
 
-    expect(result.accepted).toEqual([]);
+    expect(result.accepted.map((item) => item.category)).toEqual([
+      "silicone_kitchen_utensil",
+      "large_soft_ball",
+    ]);
     expect(result.excluded.map((item) => item.reason)).toEqual([
       "unsafe",
-      "not_for_this_quest",
       "unknown",
       "private_information",
     ]);

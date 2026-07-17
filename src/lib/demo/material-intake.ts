@@ -112,12 +112,15 @@ const acceptedAliases: Record<string, TypedMaterialMatch> = {
   },
 };
 
-const otherAllowedAliases: Record<string, string> = {
-  "board book": "Board book",
-  cardboard: "Paper or cardboard",
-  paper: "Paper or cardboard",
-  "silicone spatula": "Silicone kitchen utensil",
-  "soft ball": "Large soft ball",
+const otherAllowedAliases: Record<string, TypedMaterialMatch> = {
+  "board book": { category: "board_book", displayLabel: "Board book" },
+  cardboard: { category: "paper_or_cardboard", displayLabel: "Paper or cardboard" },
+  paper: { category: "paper_or_cardboard", displayLabel: "Paper or cardboard" },
+  "paper cup": { category: "paper_or_cardboard", displayLabel: "Paper cup" },
+  "silicone spatula": { category: "silicone_kitchen_utensil", displayLabel: "Silicone kitchen utensil" },
+  "soft ball": { category: "large_soft_ball", displayLabel: "Large soft ball" },
+  "large soft ball": { category: "large_soft_ball", displayLabel: "Large soft ball" },
+  "soccer ball": { category: "large_soft_ball", displayLabel: "Large soft ball" },
 };
 
 const unsafeWords = new Set([
@@ -355,13 +358,9 @@ export function normalizeKitchenSoundTypedMaterials(
       continue;
     }
 
-    const otherAllowedLabel = otherAllowedAliases[normalized];
-    if (otherAllowedLabel) {
-      excluded.push({
-        inputLabel: otherAllowedLabel,
-        reason: "not_for_this_quest",
-        message: "Recognized, but not used by Kitchen Sound Detectives.",
-      });
+    const otherAllowedMatch = otherAllowedAliases[normalized];
+    if (otherAllowedMatch) {
+      acceptedByCategory.set(otherAllowedMatch.category, otherAllowedMatch);
       continue;
     }
 

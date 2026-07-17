@@ -192,4 +192,20 @@ describe("live experience API route", () => {
     expect((await rejected.json()).error.code).toBe("unsafe_typed_object_labels");
     expect(fetchSpy).not.toHaveBeenCalled();
   });
+
+  it("fails typed mapping without substituting the unrelated kitchen fixture", async () => {
+    process.env.OPENAI_API_KEY = "test-key";
+    process.env.RUMMAGELAB_LIVE_OPENAI_ENABLED = "true";
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("rate limited", { status: 429 }));
+
+    const response = await POST(new Request("http://local/api/live-experience", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ operation: "typed_object_inventory", objectLabels: ["soft ball"] }),
+    }));
+    const body = await response.json();
+
+    expect(response.status).toBe(503);
+    expect(body).toEqual({ error: { code: "live_typed_mapping_unavailable" } });
+    expect(JSON.stringify(body)).not.toContain("kitchen");
+  });
 });
