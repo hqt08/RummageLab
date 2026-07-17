@@ -56,7 +56,17 @@ review before a real launch.
   provider result use a clearly labeled prepared draft.
 - Material names may be typed, but raw typed text is transient and must be
   normalized into parent-confirmed material categories before model use or any
-  adaptive context. Do not store raw text.
+  adaptive context. When the live switch is enabled, the parent may explicitly
+  send one to five object labels (80 characters each) for a one-time GPT-5.6
+  category suggestion after the same browser/server PII-and-hazard prefilter.
+  The app does not store or log those labels; only parent-confirmed allowlisted
+  categories can reach planning. The prefilter is defense in depth, not a
+  guarantee of perfect PII detection.
+- For a non-OK live-provider response, server operations logging may record only
+  the HTTP status and provider request ID to support incident debugging. It
+  must not record the request, typed labels, photo, prompt, response body,
+  authorization header, or error content. The browser receives only the closed
+  failure code and a safe fallback.
 - Parent selects an age stage; do not collect or infer a child’s date of birth.
 - Delete raw audio and image uploads immediately after their one-time processing
   step. A future persistent mode may retain only parent-selected allowlisted

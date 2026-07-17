@@ -65,7 +65,7 @@
 
 - [x] README explains the product, technical architecture, GPT-5.6 usage, Codex
       contribution, and human decisions.
-- [ ] Core Codex `/feedback` Session ID is recorded in the README.
+- [x] Core Codex `/feedback` Session ID is recorded in the README.
 - [ ] Dated commits and `docs/codex-decisions.md` distinguish work created during
       the hackathon.
 - [x] Public repository exists with an Apache-2.0 license.
