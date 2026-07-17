@@ -28,9 +28,14 @@
 
 - **Core Codex evidence:** Run `/feedback` in the core build task and record the
   real Session ID in `README.md` and `docs/codex-decisions.md`.
-- **Video evidence:** Record, publish, and add the under-three-minute video URL.
-- **Final submission:** Enter the English description and disclosures above,
-  confirm current official rules, and keep the demo available through judging.
+- **Video evidence:** Record, publish publicly on YouTube, and add the
+  under-three-minute video URL. It must have audio and clearly show what was
+  built and how Codex and GPT-5.6 were used.
+- **Final submission:** Choose the **Education** category, enter the English
+  description and disclosures above, submit by **July 21, 2026 at 5:00 pm PDT**,
+  and keep the demo available through the judging period. Recheck the
+  [official rules](https://openai.devpost.com/rules) immediately before
+  submitting.
 
 ## Product and testing
 
@@ -58,7 +63,7 @@
 
 ## Video
 
-- [ ] Public video is under three minutes and has audio.
+- [ ] Public YouTube video is under three minutes and has audio.
 - [ ] Video demonstrates the working product, not only slides.
 - [ ] Video explicitly distinguishes Codex's build-time contribution from
       GPT-5.6 runtime use.
