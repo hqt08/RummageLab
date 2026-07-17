@@ -1,18 +1,22 @@
-# Material-intake shell QA record
+# Material-intake and live-runtime QA record
 
 Date: 2026-07-16
 
-This is repeatable browser and contract evidence for the local-only intake
-slice. It does not claim live photo analysis.
+This is the repeatable browser and contract checklist for local intake, optional
+live photo analysis, and the no-key prepared fallback.
 
 ## Automated checks
 
-- Node 24 lint, typecheck, 38 Vitest tests, and production build pass.
+- Run Node 24 lint, typecheck, the full Vitest suite, and the production build.
 - Reducer tests prove that `photo` and `typed` provenance cannot start a quest
   without a current intake candidate set.
 - Utility tests cover MIME/size checks, matching image signatures, decoded
   dimension limits, typed allowlisting, quantity-sensitive container input,
   PII-like/unsafe rejection, and object-URL revocation.
+- Server tests cover the streaming 8 MB photo and 9 MB request limits without
+  trusting `Content-Length`, duplicate/unexpected fields, object-only
+  confirmation, decoded type and dimensions, metadata stripping, missing-key
+  fallback, strict provider output, content-free failures, and reset behavior.
 
 ## Browser interaction pass
 
@@ -26,7 +30,8 @@ Run against the production server at 320 × 800 and 1280 × 900:
 4. Confirm the valid kit, weather, and safety; verify the quest button enables.
 5. Edit the typed list; verify all material and safety confirmation is cleared.
 6. Reset, choose photo intake, and verify material confirmation stays disabled
-   until a valid, decoded, bounded object photo is ready.
+   until a valid, decoded, bounded object photo has been analyzed or the route
+   has returned the clearly labeled prepared inventory.
 7. Verify no horizontal overflow at either viewport and no browser warnings or
    errors.
 8. Start a photo selection and reset before validation finishes; verify the
@@ -42,24 +47,23 @@ Raw typed text is cleared on source exit, successful quest start, or reset.
 Local photo object URLs are revoked on replacement, rejection, removal, source
 exit, reset, or unmount.
 
-## Runtime-contract fallback pass
+## Live and fallback pass
 
-The same production build was checked in-browser on 2026-07-16 with no key or
-runtime planner/network request:
+Run the production build first without `OPENAI_API_KEY`:
 
-1. Confirm the prepared materials, weather tags, and safety acknowledgement.
-2. Select **Preview fallback and retry**; verify the content-free loading state
-   says that no network request is being made.
-3. Verify the simulated unavailable planner presents the prepared fallback and
-   retry controls, without showing a provider response, photo, or typed text.
-4. Select **Retry seeded planner**; verify it reaches `Kitchen Sound
-   Detectives` and its completion control.
+1. Choose a valid object photo, confirm objects only, and select **Analyze
+   objects with GPT-5.6**.
+2. Verify the server route returns the prepared inventory with an honest
+   fallback label and no provider, photo, filename, or typed-text detail.
+3. Confirm the materials, weather tags, and safety acknowledgement, then start
+   the quest. Verify the prepared validated quest remains usable.
+4. Exercise **Retry live planner** and **Open prepared fallback**; neither may
+   strand the parent or imply a successful live call.
 5. Verify the browser console has no warnings or errors.
-6. Start the fallback preview, immediately select **Reset demo**, then wait past
-   the loading delay; verify the kit-review screen remains visible and no quest
-   transition occurs.
+6. Start an analysis or planning request, immediately select **Reset demo**,
+   then verify a late response cannot restore the photo, inventory, or quest.
 
-Contract tests separately prove malformed output, age/context/material mismatch,
-timeout/unavailable taxonomy, fallback, and that seeded mode does not call
-`fetch`; the browser trace above proves the visible retry path. This is
-deterministic local simulation, not a live model or photo-analysis claim.
+With a development key, repeat the photo and quest path and verify the visible
+inventory/activity reflects mocked or controlled live output. Confirm the model
+cannot add unconfirmed material categories or a non-`sound_mix` renderer. Never
+use a photo containing a person or identifying information for this check.

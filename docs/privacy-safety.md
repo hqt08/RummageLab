@@ -32,6 +32,13 @@ review before a real launch.
 - Make object photos optional. In product copy, ask users to avoid faces and
   identifying documents; strip photo metadata and discard the object-only image
   after the one-time request.
+- The implemented live route requires the parent to attest that a photo contains
+  objects only, independently validates and decodes it, and freshly re-encodes
+  it in memory before a single model request. This reduces metadata exposure but
+  is not face detection and must not be described as a perfect privacy screen.
+- Live Responses API requests use `store: false`. The application does not save
+  the upload, sanitized image, provider response, or prompt, and public errors
+  use only the closed runtime failure taxonomy.
 - Material names may be typed, but raw typed text is transient and must be
   normalized into parent-confirmed material categories before model use or any
   adaptive context. Do not store raw text.

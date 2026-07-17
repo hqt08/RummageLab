@@ -22,7 +22,7 @@ export const PhotoInventoryRequestSchema = z.discriminatedUnion("mode", [
     .strict(),
   z
     .object({
-      mode: z.literal("future_transient_object_upload"),
+      mode: z.literal("live_transient_object_upload"),
       ageStage: AgeStageSchema,
       objectOnly: z.literal(true),
     })
@@ -63,7 +63,7 @@ export const RuntimeDiagnosticSchema = z
 
 export const RuntimeResponseMetaSchema = z
   .object({
-    source: z.enum(["seeded_provider", "seeded_fallback"]),
+    source: z.enum(["live_provider", "seeded_provider", "seeded_fallback"]),
     diagnostic: RuntimeDiagnosticSchema.optional(),
   })
   .strict();

@@ -7,7 +7,7 @@ guides it. Models do not send executable code to a learner’s browser.
 
 ```mermaid
 flowchart TB
-  PHOTO["Optional object-only photo"] -. "future adapter only" .-> VISION["Vision analysis"]
+  PHOTO["Optional parent-confirmed object-only photo"] --> VISION["Server re-encode + GPT-5.6 vision"]
   VISION --> INVENTORY["Normalized allowed-material suggestions"]
   TYPED["Optional typed materials"] --> NORMALIZE["Transient text normalization<br/>and safety screening"]
   NORMALIZE --> INVENTORY
@@ -20,7 +20,7 @@ flowchart TB
   DEMO_CONTEXT["Seeded, no-login demo context"] --> DIRECTOR
   GOALS["Curated developmental-focus allowlist"] --> DIRECTOR
 
-  DIRECTOR["Future GPT-5.6 Experience Director"] --> JSON["Structured ExperienceSpec JSON"]
+  DIRECTOR["GPT-5.6 Experience Director"] --> JSON["Structured ExperienceSpec JSON"]
   JSON --> VALIDATE{"Zod + safety + developmental-focus validation"}
   VALIDATE -->|0–3| MOMENT["Adult-led RummageMoment script"]
   VALIDATE -->|3–6| RENDER["Deterministic React quest engine"]
@@ -99,19 +99,22 @@ profile, or permanent profile of the child.
 
 1. Render a parent-facing photo/camera shell immediately, with an explicit
    “objects only; no people” reminder.
-2. The implemented server-only runtime seam has provider-neutral `PhotoInventoryRequest` and
-   `ExperienceRequest` contracts. They omit raw bytes, typed text, filenames,
-   prompts, and provider payloads; a future server adapter owns transient upload
-   handling. The sole current provider is deterministic and seeded.
-3. In a future live flow, request a constrained `PhotoInventory` from an
-   object-only image. In the current seeded path, load the matching fixture.
+2. `POST /api/live-experience` owns transient multipart bytes. It validates and
+   bounds the upload while streaming (8 MB photo, 9 MB complete request), then
+   re-encodes the image in memory and passes only sanitized bytes to the
+   server-only OpenAI provider. The stream limits do not trust `Content-Length`.
+   Runtime responses omit bytes, typed text, filenames, prompts, and provider payloads.
+   `GET /api/live-experience` exposes only content-free capability booleans so
+   the UI can present live mode honestly without revealing configuration.
+3. In live mode, request a constrained `PhotoInventory` from the confirmed
+   object-only image. In seeded mode, load the matching fixture.
    Both paths use the same schema and require parent confirmation.
 4. Typed materials and photo suggestions use the same material-confirmation and
    safety path. Require parent confirmation before activity planning.
 5. The current weather tags are prepared chips; a live weather adapter is
    deferred. Only parent-approved broad tags could ever enter planning.
-6. A future adapter sends one context-rich request for an `ExperienceSpec`; avoid a chain of model
-   calls before the child can begin.
+6. The live adapter sends one context-rich request for an `ExperienceSpec`; it
+   does not chain model calls before the child can begin.
 7. Validate the response and its age, time, focus-ID, and confirmed-material
    compatibility before rendering the corresponding prebuilt component. Malformed,
    mismatched, unavailable, and timeout outcomes map to a content-free taxonomy
@@ -132,9 +135,9 @@ expiry, and additional privacy review.
 
 | Moment | Target behavior |
 | --- | --- |
-| Photo inventory | Immediate local shell; deterministic seeded fixture and contract fallback are available |
-| Quest start | Immediate local shell and parent-confirmed materials checklist |
-| Runtime preview | Client-local deterministic state with visible loading, fallback, and retry; no runtime planner/network request |
+| Photo inventory | Immediate local preview; optional live analysis; deterministic seeded fallback |
+| Quest start | Parent-confirmed checklist; validated live plan or prepared fallback |
+| Runtime request | Visible loading, fallback, and retry around the server route; invalid or unavailable live output never bypasses the prepared path |
 | Interactive tool | Local rendering; no model round-trip per tap |
 | Parent reflection | Prepared review only; typed reflection and voice are deferred |
 | Failure | Seeded or cached quest remains available |

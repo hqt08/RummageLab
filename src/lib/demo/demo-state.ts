@@ -3,6 +3,7 @@ import type {
   AllowedMaterialCategory,
   NextActivityContext,
   ParentObservationSuggestion,
+  QuestSpec,
 } from "../schemas";
 import {
   KITCHEN_SOUND_REQUIRED_MATERIALS,
@@ -40,6 +41,7 @@ export type KitchenSoundDemoState = {
   parentApprovedWeather: boolean;
   parentConfirmedSafety: boolean;
   activityContext: ActivityContext | null;
+  experience: QuestSpec | null;
   reflectionSkipped: boolean;
   observationDraft: ObservationDraft | null;
   reviewedObservation: ParentObservationSuggestion | null;
@@ -73,7 +75,7 @@ export type KitchenSoundDemoAction =
       type: "SET_SAFETY_CONFIRMED";
       confirmed: boolean;
     }
-  | { type: "START_QUEST" }
+  | { type: "START_QUEST"; experience?: QuestSpec }
   | { type: "FINISH_QUEST" }
   | { type: "SKIP_REFLECTION" }
   | { type: "REVIEW_SEEDED_OBSERVATION" }
@@ -102,6 +104,7 @@ export function createInitialKitchenSoundDemoState(): KitchenSoundDemoState {
     parentApprovedWeather: false,
     parentConfirmedSafety: false,
     activityContext: null,
+    experience: null,
     reflectionSkipped: false,
     observationDraft: null,
     reviewedObservation: null,
@@ -210,6 +213,7 @@ export function kitchenSoundDemoReducer(
             confirmedMaterials: [],
             parentConfirmedSafety: false,
             activityContext: null,
+            experience: null,
           }
         : state;
 
@@ -225,6 +229,7 @@ export function kitchenSoundDemoReducer(
             confirmedMaterials: [],
             parentConfirmedSafety: false,
             activityContext: null,
+            experience: null,
           }
         : state;
 
@@ -235,6 +240,7 @@ export function kitchenSoundDemoReducer(
             confirmedMaterials: [],
             parentConfirmedSafety: false,
             activityContext: null,
+            experience: null,
           }
         : state;
 
@@ -306,6 +312,7 @@ export function kitchenSoundDemoReducer(
         ...state,
         phase: "quest",
         activityContext,
+        experience: action.experience ?? null,
       };
     }
 

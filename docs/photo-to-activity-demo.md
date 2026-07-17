@@ -40,7 +40,8 @@ or analyzed in the seeded path.
    and an object-only prepared photo. Choosing another stage is future work.
 2. **Choose an intake path** — The parent can use the prepared kit, select an
    object-only JPEG, PNG, or WebP for a browser-local preview, or type object
-   names. The local photo is not uploaded or analyzed. Typed input uses a
+   names. The photo is sent only after the parent explicitly confirms the
+   object-only boundary and chooses live analysis. Typed input uses a
    deterministic allowlist rather than pretending to be model recognition.
 3. **See, then confirm** — The app shows three suggested cards: `plastic
    container`, `wooden spoon`, and `dish towel`. The parent taps to confirm each
@@ -57,8 +58,8 @@ or analyzed in the seeded path.
 
 | Mode | What happens | How to present it honestly |
 | --- | --- | --- |
-| Live (future) | A server-only GPT-5.6 adapter may read the object-only photo and return a constrained `PhotoInventory` | Validate the transient upload and analysis result, then require parent confirmation |
-| Local photo shell (implemented) | The browser previews an object-only file, then offers the prepared sound-kit categories for parent confirmation | State that the photo stays local and has not been analyzed |
+| Live (implemented, optional) | After explicit object-only confirmation, the server re-encodes the transient photo and GPT-5.6 returns a constrained `PhotoInventory` | State that the model suggests objects but cannot confirm presence or safety; require parent confirmation |
+| Local preview | The browser previews the selected object-only file before optional analysis | Replacing, removing, or resetting clears stale suggestions and confirmation |
 | Typed shell (implemented) | A deterministic alias table maps safe Kitchen Sound names to the same confirmation cards and keeps unsafe, contact-like, off-quest, and unknown entries out | Show both accepted and excluded entries before confirmation |
 | Seeded fallback (implemented) | The prepared photo loads a matching, Zod-parsed `PhotoInventory` fixture | The persistent seeded label says there was no live analysis |
 
@@ -70,13 +71,15 @@ confirmation. Editing the typed list, replacing or removing a photo, or
 switching paths clears stale confirmations. The quest cannot start until the
 current path is complete.
 
-Before a future live adapter sends a file, the server must re-encode it to strip
-metadata, enforce size and dimension limits, screen the object-only boundary,
-and avoid content logging. The current local shell does not need or claim those
-network-upload controls.
+Before the live adapter sends a file, the server enforces size and dimension
+limits, validates its declared type against decoded content, and freshly
+re-encodes it as JPEG in memory to strip metadata. The parent confirms the
+object-only boundary; the app does not claim automated face or PII detection.
+The sanitized image is sent once with `store: false` and is not persisted or
+placed in content logs.
 
-The implemented runtime seam has no upload route, API call, SDK, or credential.
-It accepts only content-free request metadata and validated context. If a provider
+The live route accepts the transient upload only for inventory analysis and
+accepts only validated, parent-confirmed context for activity planning. If a provider
 returns malformed or incompatible data, times out, or is unavailable, it returns
 the prepared Zod-validated fallback with a public diagnostic that contains only a
 closed error code and retry flag. The demo exposes that loading/fallback/retry
