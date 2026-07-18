@@ -35,6 +35,12 @@ export const MaterialInputSchema = z.discriminatedUnion("source", [
 
 export const ConfirmedMaterialSchema = z.object({
   allowedMaterialCategory: AllowedMaterialCategorySchema,
+  /**
+   * Optional short human label the parent confirmed (e.g. "rubber duck"). It
+   * carries the real object into activity planning, especially for the open
+   * `other_safe_object` category. Absent for older seeded/category-only paths.
+   */
+  label: z.string().min(1).max(60).optional(),
   parentConfirmed: z.literal(true),
 }).strict();
 

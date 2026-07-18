@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { findLearningFocus } from "../data/learning-focuses";
+import { containsHardDenylistedTerm } from "../demo/hard-denylist";
 import { kitchenSoundPhotoInventory, kitchenSoundQuest } from "../demo/kitchen-sound-detectives";
 import {
   availableApprovedQuestTemplateIds,
@@ -150,16 +151,25 @@ export function validateExperienceForContext(
 
 export function validateLivePhotoInventory(input: unknown) {
   const inventory = PhotoInventorySchema.parse(input);
-  const categories = inventory.suggestedItems.map(
-    (item) => item.allowedMaterialCategory,
-  );
-  if (
-    inventory.imageMode !== "live" ||
-    new Set(categories).size !== categories.length
-  ) {
+  if (inventory.imageMode !== "live") {
     throw new RuntimeProviderFailure("provider_context_mismatch");
   }
-  return inventory;
+
+  // Server-side hard-denylist floor: drop any model-surfaced object whose label
+  // matches a known young-child hazard before a parent ever sees it, regardless
+  // of the model's own safetyLevel.
+  const safeItems = inventory.suggestedItems.filter(
+    (item) => !containsHardDenylistedTerm(item.suggestedLabel),
+  );
+
+  const labels = safeItems.map((item) => item.suggestedLabel.trim().toLowerCase());
+  if (safeItems.length === 0 || new Set(labels).size !== labels.length) {
+    throw new RuntimeProviderFailure("provider_context_mismatch");
+  }
+
+  // Re-parse the filtered set so the returned inventory still satisfies the
+  // 1..5 bound and every downstream invariant.
+  return PhotoInventorySchema.parse({ ...inventory, suggestedItems: safeItems });
 }
 
 export function runtimeDiagnostic(

@@ -808,6 +808,21 @@ legend {
   line-height: 1.45;
 }
 
+.check-warning {
+  margin-top: 0.3rem;
+  padding: 0.4rem 0.55rem;
+  border-radius: 0.5rem;
+  background: color-mix(in srgb, var(--warn, #b45309) 12%, transparent);
+  color: var(--warn, #b45309);
+  font-size: 0.76rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.check-warning strong {
+  font-weight: 800;
+}
+
 .context-block {
   margin-top: 1.2rem;
   padding-top: 1.2rem;

@@ -13,6 +13,9 @@ export const AllowedMaterialCategorySchema = z.enum([
   "board_book",
   "large_soft_ball",
   "large_natural_object",
+  // Open, parent-vetted bucket for any other ordinary object GPT surfaces that
+  // does not fit a bespoke category. Still parent-confirmed and denylist-checked.
+  "other_safe_object",
 ]);
 
 /**

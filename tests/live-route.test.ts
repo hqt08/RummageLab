@@ -128,9 +128,9 @@ describe("live experience API route", () => {
       imageMode: "live", objectOnlyReminder: true, requiresAdultSupervision: true,
       unsafeOrUncertainNotice: "A parent must confirm every object and check it before play.",
       suggestedItems: [
-        { suggestedLabel: "Blue containers", allowedMaterialCategory: "large_empty_plastic_container", needsParentConfirmation: true },
-        { suggestedLabel: "Wooden spoon", allowedMaterialCategory: "wooden_kitchen_utensil", needsParentConfirmation: true },
-        { suggestedLabel: "Soft towel", allowedMaterialCategory: "soft_cloth", needsParentConfirmation: true },
+        { suggestedLabel: "Blue containers", allowedMaterialCategory: "large_empty_plastic_container", safetyLevel: "ok", warnings: [], needsParentConfirmation: true },
+        { suggestedLabel: "Wooden spoon", allowedMaterialCategory: "wooden_kitchen_utensil", safetyLevel: "ok", warnings: [], needsParentConfirmation: true },
+        { suggestedLabel: "Soft towel", allowedMaterialCategory: "soft_cloth", safetyLevel: "ok", warnings: [], needsParentConfirmation: true },
       ],
     }));
     const form = new FormData();
@@ -222,7 +222,7 @@ describe("live experience API route", () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(providerResponse({
       imageMode: "live", objectOnlyReminder: true, requiresAdultSupervision: true,
       unsafeOrUncertainNotice: "Confirm each category.",
-      suggestedItems: [{ suggestedLabel: "Large soft ball", allowedMaterialCategory: "large_soft_ball", needsParentConfirmation: true }],
+      suggestedItems: [{ suggestedLabel: "Large soft ball", allowedMaterialCategory: "large_soft_ball", safetyLevel: "ok", warnings: [], needsParentConfirmation: true }],
     }));
     const response = await POST(new Request("http://local/api/live-experience", {
       method: "POST", headers: { "content-type": "application/json" },

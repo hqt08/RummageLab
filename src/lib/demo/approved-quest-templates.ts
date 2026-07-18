@@ -79,6 +79,7 @@ const materialWords: Record<AllowedMaterialCategory, string> = {
   board_book: "board book",
   large_soft_ball: "large soft ball",
   large_natural_object: "large natural object",
+  other_safe_object: "everyday object",
 };
 
 /**

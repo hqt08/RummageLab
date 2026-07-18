@@ -58,16 +58,22 @@ export const kitchenSoundPhotoInventory = PhotoInventorySchema.parse({
     {
       suggestedLabel: "Two empty plastic containers",
       allowedMaterialCategory: "large_empty_plastic_container",
+      safetyLevel: "ok",
+      warnings: [],
       needsParentConfirmation: true,
     },
     {
       suggestedLabel: "Wooden spoon",
       allowedMaterialCategory: "wooden_kitchen_utensil",
+      safetyLevel: "ok",
+      warnings: [],
       needsParentConfirmation: true,
     },
     {
       suggestedLabel: "Clean, folded dish towel",
       allowedMaterialCategory: "soft_cloth",
+      safetyLevel: "ok",
+      warnings: [],
       needsParentConfirmation: true,
     },
   ],

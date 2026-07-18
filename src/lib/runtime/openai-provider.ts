@@ -8,8 +8,11 @@ import {
   availableApprovedQuestTemplateIds,
   resolveApprovedQuestTemplate,
 } from "../demo/approved-quest-templates";
-import { PhotoInventorySchema } from "../schemas";
+import { AllowedMaterialCategorySchema, PhotoInventorySchema } from "../schemas";
 import { RuntimeProviderFailure } from "./seeded-runtime";
+
+/** Single source of truth for the model-facing category enum (no hand copy). */
+const ALLOWED_MATERIAL_CATEGORY_ENUM = [...AllowedMaterialCategorySchema.options];
 
 export type TransientObjectImage = {
   mimeType: "image/jpeg" | "image/png" | "image/webp";
@@ -24,7 +27,7 @@ export type OpenAIProviderOptions = {
   timeoutMs?: number;
 };
 
-const PHOTO_INVENTORY_JSON_SCHEMA = {
+export const PHOTO_INVENTORY_JSON_SCHEMA = {
   type: "object",
   additionalProperties: false,
   required: [
@@ -47,22 +50,23 @@ const PHOTO_INVENTORY_JSON_SCHEMA = {
         required: [
           "suggestedLabel",
           "allowedMaterialCategory",
+          "safetyLevel",
+          "warnings",
           "needsParentConfirmation",
         ],
         properties: {
           suggestedLabel: { type: "string", minLength: 1, maxLength: 80 },
           allowedMaterialCategory: {
             type: "string",
-            enum: [
-              "large_empty_plastic_container",
-              "wooden_kitchen_utensil",
-              "silicone_kitchen_utensil",
-              "soft_cloth",
-              "paper_or_cardboard",
-              "board_book",
-              "large_soft_ball",
-              "large_natural_object",
-            ],
+            // Derived from AllowedMaterialCategorySchema so this can never drift
+            // from the Zod source of truth (asserted by an enum-sync test).
+            enum: ALLOWED_MATERIAL_CATEGORY_ENUM,
+          },
+          safetyLevel: { type: "string", enum: ["ok", "caution"] },
+          warnings: {
+            type: "array",
+            maxItems: 3,
+            items: { type: "string", minLength: 1, maxLength: 120 },
           },
           needsParentConfirmation: { type: "boolean", const: true },
         },
@@ -91,6 +95,18 @@ function recordProviderHttpFailure(response: Response) {
     status: response.status,
     requestId: response.headers.get("x-request-id") ?? response.headers.get("request-id") ?? null,
   });
+}
+
+/**
+ * Objects are now deduplicated by label, not category: several distinct
+ * everyday objects can share the open `other_safe_object` category, so only a
+ * repeated label indicates a malformed response.
+ */
+function hasUniqueSuggestedLabels(
+  items: ReadonlyArray<{ suggestedLabel: string }>,
+): boolean {
+  const labels = items.map((item) => item.suggestedLabel.trim().toLowerCase());
+  return new Set(labels).size === labels.length;
 }
 
 function outputText(body: ResponsesBody): string {
@@ -172,10 +188,10 @@ export function createOpenAIExperienceProvider(
           PHOTO_INVENTORY_JSON_SCHEMA,
           [{
             type: "input_text",
-            text: `Map only these transient, parent-entered everyday-object labels to the allowed categories. Do not repeat labels, infer identity, determine safety, or introduce objects. Every suggestion requires parent confirmation. Labels: ${JSON.stringify(parsed.objectLabels)}`,
+            text: `Interpret these transient, parent-entered everyday-object labels. For each distinct object give a short label, a coarse category (use "other_safe_object" if none fits), a safetyLevel of "ok" or "caution", and up to three short parent cautions in warnings (empty if none). Do not repeat objects, infer identity, or make the final safety decision — a parent confirms every suggestion. Labels: ${JSON.stringify(parsed.objectLabels)}`,
           }],
         ));
-        if (result.imageMode !== "live" || new Set(result.suggestedItems.map((item) => item.allowedMaterialCategory)).size !== result.suggestedItems.length) {
+        if (result.imageMode !== "live" || !hasUniqueSuggestedLabels(result.suggestedItems)) {
           throw new RuntimeProviderFailure("provider_malformed_response");
         }
         return result;
@@ -187,11 +203,11 @@ export function createOpenAIExperienceProvider(
         "photo_inventory",
         PHOTO_INVENTORY_JSON_SCHEMA,
         [
-          { type: "input_text", text: "Identify only clearly visible, large household objects that map to the allowed categories. Do not identify people or infer safety. Every suggestion requires parent confirmation." },
+          { type: "input_text", text: "Identify clearly visible household objects a parent might use for supervised toddler play. For each object give a short label, a coarse category (use \"other_safe_object\" if none fits), a safetyLevel of \"ok\" or \"caution\", and up to three short parent cautions in warnings (empty if none). Do not identify people or make the final safety decision — a parent confirms every suggestion." },
           { type: "input_image", image_url: `data:${options.transientImage.mimeType};base64,${options.transientImage.base64}`, detail: "low" },
         ],
       ));
-      if (result.imageMode !== "live" || new Set(result.suggestedItems.map((item) => item.allowedMaterialCategory)).size !== result.suggestedItems.length) {
+      if (result.imageMode !== "live" || !hasUniqueSuggestedLabels(result.suggestedItems)) {
         throw new RuntimeProviderFailure("provider_malformed_response");
       }
       return result;

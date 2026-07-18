@@ -1,5 +1,6 @@
 import type { AllowedMaterialCategory } from "../schemas";
 
+import { containsHardDenylistedTerm } from "./hard-denylist";
 import { KITCHEN_SOUND_REQUIRED_MATERIALS } from "./kitchen-sound-detectives";
 
 export const LOCAL_OBJECT_PHOTO_MAX_BYTES = 8 * 1024 * 1024;
@@ -123,20 +124,6 @@ const otherAllowedAliases: Record<string, TypedMaterialMatch> = {
   "soccer ball": { category: "large_soft_ball", displayLabel: "Large soft ball" },
 };
 
-const unsafeWords = new Set([
-  "balloon",
-  "battery",
-  "coin",
-  "cord",
-  "glass",
-  "knife",
-  "magnet",
-  "marble",
-  "needle",
-  "scissors",
-  "string",
-]);
-
 function normalizeLabel(value: string): string {
   return value
     .normalize("NFKC")
@@ -156,9 +143,7 @@ function looksLikePrivateInformation(value: string): boolean {
 }
 
 function containsUnsafeWord(value: string): boolean {
-  return normalizeLabel(value)
-    .split(" ")
-    .some((word) => unsafeWords.has(word));
+  return containsHardDenylistedTerm(value);
 }
 
 /**

@@ -69,6 +69,7 @@ const materialDetails: Record<AllowedMaterialCategory, string> = {
   board_book: "Intact, sturdy pages",
   large_soft_ball: "Too large to fit in a child’s mouth",
   large_natural_object: "Large, clean, and adult-checked",
+  other_safe_object: "Parent-checked and safe for supervised play",
 };
 
 const materialNames: Record<AllowedMaterialCategory, string> = {
@@ -80,6 +81,7 @@ const materialNames: Record<AllowedMaterialCategory, string> = {
   board_book: "board book",
   large_soft_ball: "large soft ball",
   large_natural_object: "large natural object",
+  other_safe_object: "everyday object",
 };
 
 const intakeChoiceCopy: Record<
@@ -233,6 +235,8 @@ export function KitchenSoundDemo() {
       ? (typedLiveInventory?.suggestedItems ?? typedMaterialNormalization.accepted.map((item) => ({
           suggestedLabel: item.displayLabel,
           allowedMaterialCategory: item.category,
+          safetyLevel: "ok" as const,
+          warnings: [] as string[],
         })))
       : state.materialSource === "photo"
         ? liveInventory?.suggestedItems ?? []
@@ -1168,6 +1172,14 @@ export function KitchenSoundDemo() {
                             <span className="check-detail">
                               {materialDetails[item.allowedMaterialCategory]}
                             </span>
+                            {item.warnings.length > 0 ? (
+                              <span className="check-warning" role="note">
+                                <strong>
+                                  {item.safetyLevel === "caution" ? "Caution" : "Note"}:
+                                </strong>{" "}
+                                {item.warnings.join(" ")} A grown-up decides whether to include it.
+                              </span>
+                            ) : null}
                           </span>
                         </label>
                       );
