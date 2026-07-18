@@ -9,6 +9,9 @@ export function getLiveOpenAICapability() {
   const enabled =
     process.env.RUMMAGELAB_LIVE_OPENAI_ENABLED === "true" &&
     Boolean(apiKey);
+  // Owner-configurable model tier (e.g. a faster/cheaper variant). Falls back
+  // to the default model when unset. Only the model id crosses this boundary.
+  const model = process.env.RUMMAGELAB_OPENAI_MODEL?.trim() || undefined;
 
-  return { enabled, apiKey };
+  return { enabled, apiKey, model };
 }

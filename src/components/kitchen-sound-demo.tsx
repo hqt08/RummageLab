@@ -1013,7 +1013,7 @@ export function KitchenSoundDemo() {
                         </label>
                         <div className="button-row">
                           {livePhotoAnalysisAvailable ? (
-                            <button className="primary-button" disabled={!objectOnlyConsent || runtimePreviewStatus === "loading"} onClick={analyzePhoto} type="button">Analyze objects with GPT-5.6</button>
+                            <button className="primary-button" disabled={!objectOnlyConsent || runtimePreviewStatus === "loading"} onClick={analyzePhoto} type="button">{runtimePreviewStatus === "loading" ? (<><span className="loading-spinner loading-spinner--inline" aria-hidden="true" />Analyzing objects…</>) : "Analyze objects with GPT-5.6"}</button>
                           ) : null}
                           <button className="text-button photo-remove" onClick={() => { clearPhotoSelection(); setAnnouncement("Photo removed and confirmations cleared."); }} type="button">Remove photo</button>
                         </div>
@@ -1066,7 +1066,7 @@ export function KitchenSoundDemo() {
                           onClick={suggestTypedCategories}
                           type="button"
                         >
-                          {typedInventoryStatus === "loading" ? "Suggesting safe categories…" : "Suggest safe categories with GPT-5.6"}
+                          {typedInventoryStatus === "loading" ? (<><span className="loading-spinner loading-spinner--inline" aria-hidden="true" />Suggesting safe categories…</>) : "Suggest safe categories with GPT-5.6"}
                         </button>
                       </div>
                     ) : (
@@ -1327,9 +1327,10 @@ export function KitchenSoundDemo() {
                       </button>
                     </>
                   ) : null}
-                  {runtimePreviewStatus === "loading" ? (
-                    <p className="gate-note" role="status">
-                      Preparing a strictly validated activity. Raw photo and typed text are not included in this planning request.
+                  {runtimePreviewStatus === "loading" && canStart ? (
+                    <p className="gate-note runtime-loading" role="status">
+                      <span className="loading-spinner" aria-hidden="true" />
+                      Generating a strictly validated activity… Raw photo and typed text are not included in this planning request.
                     </p>
                   ) : null}
                   {runtimePreviewStatus === "fallback" || runtimePreviewStatus === "error" ? (

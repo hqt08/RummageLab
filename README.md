@@ -2,7 +2,7 @@
 
 > Turn the things around you into moments of discovery for ages 0–6.
 
-**Status:** Seeded demo plus an optional, default-off live GPT-5.6 photo-to-activity path · **Track:** Education
+**Status:** Deterministic seeded demo plus an optional, default-off live GPT-5.6 path that vets any parent-approved object and authors an age-, weather-, and object-appropriate activity · **Track:** Education
 
 RummageLab helps a parent turn a few ordinary objects and a child’s curiosity
 into a developmentally appropriate moment of discovery. Every activity ends with
@@ -15,13 +15,18 @@ chat transcript.
    preview followed by optional live analysis, or a small typed-material allowlist, then confirms the
    same safe material inventory. The visible **Anchorage, Alaska** label and
    broad weather chips are prepared demo context—not a lookup or family location.
-2. The server-only runtime accepts only parent-approved `ActivityContext` and returns
-   a Zod-validated `ExperienceSpec`: a parent-led `RummageMoment` for ages 0–3,
-   or a short `QuestSpec` for ages 3–6. For the focused 3-year-old demo, an optional
-   live adapter uses GPT-5.6 only when a server-side key and explicit emergency
-   switch are both enabled. It suggests an allowlisted photo inventory and composes
-   the validated Kitchen Sound quest. Missing credentials, a disabled switch, or
-   provider failure preserve the deterministic seeded path.
+2. The server-only runtime accepts only a parent-approved `ActivityContext` and
+   returns a Zod-validated `ExperienceSpec`. On the **seeded prepared kit** this is
+   the deterministic Kitchen Sound quest with no model call. On the **live
+   photo/typed path** (ages 3–4), GPT-5.6 vets the objects and then *authors* a
+   full activity tailored to the confirmed objects, weather, and age; the server
+   re-validates it against the parent-approved context—materials must be a subset
+   of the confirmed categories, developmental-focus IDs must be in the local
+   catalogue, every step must fit the time window, and the tool must be one of five
+   prebuilt renderers—before it ever reaches the child. Missing credentials, a
+   disabled switch, provider failure, or a rejected activity fall back to a reviewed
+   template. The activity screen shows an honest provenance badge (generated live,
+   prepared demo, or prepared fallback) and a one-line summary.
 3. For children 3+, RummageLab can render an approved interactive
    **RummageTool**. For younger children, it gives the parent a simple co-play
    script rather than putting the child in front of a screen.
@@ -39,6 +44,25 @@ plastic container, wooden utensil, soft cloth, suggested Anchorage weather
 tags, and safety checkpoint. The app then renders a validated `sound_mix`
 quest, an optional typed or prepared parent observation, and at most one session-only
 try-next idea made only from parent-approved tags.
+
+### Two paths: a seeded golden path and an adaptive live path
+
+For the hackathon, the **seeded prepared-kit path is the reliable golden path**:
+it needs no key, makes no model call, and always renders the same validated
+Kitchen Sound Detectives quest. Judges can run the entire experience—intake,
+confirmation, activity, reflection, and one next idea—with nothing configured.
+
+The optional **live path** showcases the adaptive nature of GPT-5.6. A parent can
+photograph or type *any* ordinary object, not just a fixed list. GPT-5.6 suggests
+a short label, a coarse category, a safety level, and up to three parent cautions
+for each object. A local **hard denylist** removes clearly hazardous items
+(choking, sharp, cords, batteries, glass, and similar) before a parent ever sees
+them, on both the client prefilter and the server; the parent then confirms each
+object. Once the context is parent-approved, GPT-5.6 authors a bespoke activity
+that references the real objects by name and fits the age and weather. Nothing the
+model authors reaches a child without passing (1) the local hard denylist, (2)
+strict Zod plus context re-validation, and (3) the parent's confirmation—so the
+adaptive path keeps the same safety floor as the seeded one.
 
 The prepared-kit path remains deliberately labeled as seeded and needs no key.
 For live photo analysis, the parent must confirm that the image contains objects
@@ -106,8 +130,9 @@ See [the detailed architecture](docs/architecture.md).
 
 ### GPT-5.6 runtime
 
-- Uses object photos and parent-provided context to compose a constrained,
-  developmentally appropriate moment or quest.
+- Vets any parent-approved object and authors a constrained, developmentally
+  appropriate activity tailored to the confirmed objects, age, and weather—then
+  re-validated server-side before it reaches the child.
 - Returns structured data that the server validates before it reaches the child.
 - Turns a parent reflection into a small, editable observation rather than a
   child diagnosis or opaque score.
@@ -122,11 +147,12 @@ See [the detailed architecture](docs/architecture.md).
 - **Evidence:** dated commits and [Codex decision log](docs/codex-decisions.md).
 
 For the hackathon, Codex is used materially at build time to create and verify
-the product. The live runtime may select only a validated `RummageToolSpec`; the
-app still renders only approved, prebuilt React components. The seeded path uses
-the same validation boundary without requiring credentials. A teacher/parent
-authoring studio is documented phase-two scope; even then, the learner app will
-never execute arbitrary generated code.
+the product. The live runtime authors a full `QuestSpec` that is re-validated
+against the parent-approved context and may render only one of five prebuilt,
+non-recording React `RummageTool` components; it never executes arbitrary
+generated code. The seeded path uses the same validation boundary without
+requiring credentials. A teacher/parent authoring studio is documented phase-two
+scope; even then, the learner app will never execute arbitrary generated code.
 
 ## Technology choices
 
@@ -163,13 +189,17 @@ explicit server-only switch only in an ignored
 ```bash
 OPENAI_API_KEY=your-development-key
 RUMMAGELAB_LIVE_OPENAI_ENABLED=true
+# Optional: select a faster/cheaper model tier. Defaults to gpt-5.6 when unset.
+RUMMAGELAB_OPENAI_MODEL=gpt-5.6
 ```
 
-The live slice is deliberately pinned to `gpt-5.6`. It runs only when both
-`RUMMAGELAB_LIVE_OPENAI_ENABLED === "true"` and `OPENAI_API_KEY` are present;
+The live slice defaults to `gpt-5.6`; set `RUMMAGELAB_OPENAI_MODEL` to point the
+Responses API at a faster or cheaper tier without a code change. It runs only when
+both `RUMMAGELAB_LIVE_OPENAI_ENABLED === "true"` and `OPENAI_API_KEY` are present;
 otherwise it fails closed before server photo parsing, image sanitization,
-provider construction, or an outbound model request. The prepared seeded demo
-remains fully usable.
+provider construction, or an outbound model request. Object mapping uses a 20s
+timeout and full activity authoring a 45s timeout, each failing to the reviewed
+fallback rather than hanging. The prepared seeded demo remains fully usable.
 
 `GET /api/live-experience` reports only whether this combined live capability and
 the seeded demo are available; it never returns credential or provider details.
