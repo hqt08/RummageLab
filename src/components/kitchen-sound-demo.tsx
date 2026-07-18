@@ -996,7 +996,6 @@ export function KitchenSoundDemo() {
                       <input
                         accept="image/jpeg,image/png,image/webp"
                         aria-describedby="photo-boundary"
-                        capture="environment"
                         onChange={selectLocalPhoto}
                         ref={photoInputRef}
                         type="file"
@@ -1147,7 +1146,7 @@ export function KitchenSoundDemo() {
                       : "Only exact matches from the small demo allowlist appear here. Confirm what is present and safe before it enters context."}
                 </p>
 
-                {hasKitchenSoundKit ? (
+                {hasKitchenSoundKit && canStart ? (
                   <aside className="activity-unlocked" aria-label="Unlocked activity">
                     <span className="specimen-label">Activity unlocked</span>
                     <h3>Kitchen Sound Detectives</h3>
