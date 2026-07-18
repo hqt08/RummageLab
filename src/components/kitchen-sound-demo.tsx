@@ -685,7 +685,9 @@ export function KitchenSoundDemo() {
         JSON.stringify(current.confirmedObjects) === JSON.stringify(state.confirmedObjects) &&
         JSON.stringify(current.selectedWeatherTags) === JSON.stringify(state.selectedWeatherTags) &&
         current.parentApprovedWeather;
-      if (runtimeRequestVersionRef.current !== requestVersion || !contextStillMatches || payload.experience.experienceMode !== "guided_quest") return;
+      // Accept every validated spec kind: guided quests for 3-6 and
+      // caregiver-led moments for the under-three bands.
+      if (runtimeRequestVersionRef.current !== requestVersion || !contextStillMatches) return;
       setActiveQuest(payload.experience);
       setLiveSource(payload.runtime.source === "live_provider" ? "live_provider" : "seeded_fallback");
       setRuntimePreviewStatus("idle");
