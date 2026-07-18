@@ -751,7 +751,7 @@ export function KitchenSoundDemo() {
     );
   const canStart = canStartKitchenSoundQuest(state);
   const gateParts = [
-    !isKitchenSoundAge ? "Ages 3–4 for this guided sound quest" : null,
+    !isKitchenSoundAge ? "Ages 3–4 for this guided activity" : null,
     state.materialSource === "photo" && !photoPreviewUrl
       ? "an object-only photo"
       : null,
@@ -774,6 +774,19 @@ export function KitchenSoundDemo() {
   const learningFocuses = activeQuest.developmentalFocusIds
     .map((id) => findLearningFocus(id))
     .filter((focus) => focus !== undefined);
+
+  // How the current activity was produced, for an honest parent-facing badge.
+  const activityOrigin: "prepared" | "live" | "fallback" =
+    state.materialSource === "seeded_demo"
+      ? "prepared"
+      : liveSource === "live_provider"
+        ? "live"
+        : "fallback";
+  const activityOriginLabel = {
+    prepared: "Prepared demo activity",
+    live: "Generated live for your objects, weather & age",
+    fallback: "Prepared fallback activity",
+  }[activityOrigin];
 
   const canCreateNextSuggestion =
     canCreateKitchenSoundNextSuggestion(state);
@@ -883,7 +896,7 @@ export function KitchenSoundDemo() {
             {!isKitchenSoundAge ? (
               <aside className="age-stage-note" role="status">
                 <p className="panel-kicker">This public demo</p>
-                <h2>Choose Ages 3–4 to open the guided sound quest.</h2>
+                <h2>Choose Ages 3–4 to open the guided activity.</h2>
                 <p>
                   The other age bands set the product direction above. Their
                   dedicated parent-led activities are not part of this single
@@ -1103,7 +1116,7 @@ export function KitchenSoundDemo() {
                     {typedMaterialText.trim() &&
                     typedMaterialNormalization.missing.length > 0 ? (
                       <div className="normalization-group missing-group">
-                        <h3>Still needed for this sound quest</h3>
+                        <h3>Still needed for the Kitchen Sound kit</h3>
                         <p>
                           Kitchen Sound Detectives uses {typedMaterialNormalization.missing
                             .map((category) => materialNames[category])
@@ -1354,11 +1367,18 @@ export function KitchenSoundDemo() {
         {state.phase === "quest" ? (
           <section className="stage" data-phase="quest">
             <StageHeader
-              deck="The real objects lead the play. This approved screen only guides prediction, noticing, pattern play, and turns."
+              deck="The real objects lead the play. This approved screen only guides prediction, noticing, and turns."
               eyebrow={phaseProgress[state.phase]}
               headingRef={stageHeadingRef}
               title={activeQuest.title}
             />
+
+            <div className={`activity-origin activity-origin--${activityOrigin}`} role="note">
+              <span className="activity-origin-badge">{activityOriginLabel}</span>
+              {activeQuest.activitySummary ? (
+                <p className="activity-summary">{activeQuest.activitySummary}</p>
+              ) : null}
+            </div>
 
             <div className="quest-layout">
               <div>
