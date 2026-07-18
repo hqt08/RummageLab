@@ -25,6 +25,10 @@ import { ActivityContextSchema } from "../../../lib/schemas";
 import { guardTypedObjectLabels } from "../../../lib/demo/material-intake";
 
 export const runtime = "nodejs";
+// Authoring a full activity can take longer than a simple object inventory;
+// allow the server function to outlast the provider's generation timeout so a
+// slow model call fails to the reviewed fallback rather than a gateway timeout.
+export const maxDuration = 60;
 
 const ExperienceBodySchema = z.object({
   operation: z.literal("experience_selection"),

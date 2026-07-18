@@ -15,6 +15,8 @@ import { RuntimeProviderFailure } from "./seeded-runtime";
 const ALLOWED_MATERIAL_CATEGORY_ENUM = [...AllowedMaterialCategorySchema.options];
 /** Only human-curated developmental focus IDs may be authored by the model. */
 const DEVELOPMENTAL_FOCUS_ID_ENUM = learningFocusCatalog.map((focus) => focus.id);
+/** Authoring a full activity reasons longer than a simple object inventory. */
+const GENERATION_TIMEOUT_MS = 45_000;
 
 export type TransientObjectImage = {
   mimeType: "image/jpeg" | "image/png" | "image/webp";
@@ -251,13 +253,14 @@ export function createOpenAIExperienceProvider(
     name: string,
     schema: object,
     content: Array<Record<string, unknown>>,
+    callTimeoutMs: number = timeoutMs,
   ): Promise<unknown> {
     if (!options.apiKey?.trim()) {
       throw new RuntimeProviderFailure("provider_unavailable");
     }
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    const timeout = setTimeout(() => controller.abort(), callTimeoutMs);
     try {
       const response = await fetchImpl("https://api.openai.com/v1/responses", {
         method: "POST",
@@ -365,6 +368,7 @@ export function createOpenAIExperienceProvider(
           type: "input_text",
           text: `Author one short, safe, grown-up-led activity for a ${context.ageStage} child, tailored to these parent-confirmed everyday objects and context. Refer to the objects by their labels in the steps. Rules: experienceMode "guided_quest"; ageStage "${context.ageStage}"; 2-6 steps, each minute within 0..${context.availableMinutes}; choose developmentalFocusIds only from ${JSON.stringify(DEVELOPMENTAL_FOCUS_ID_ENUM)}; use materials only from ${JSON.stringify(confirmedCategories)}; choose exactly one tool from sort, measure, predict, sound_mix, or field_journal; keep it ${context.setting}, calm, non-recording, and appropriate for the weather tags ${JSON.stringify(weatherTags)}. activitySummary is one short parent-facing sentence describing the activity. No URLs, code, brand names, or real names. Confirmed objects: ${JSON.stringify(confirmed.map((item) => item.label))}. Context: ${JSON.stringify(context)}`,
         }],
+        GENERATION_TIMEOUT_MS,
       );
       // Structural parse here; resolveExperience re-validates against the
       // parent-approved context (materials subset, focus catalogue, time window).
