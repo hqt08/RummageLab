@@ -17,6 +17,34 @@ const context = createKitchenSoundActivityContext({
   parentConfirmedSafety: true,
 });
 
+const validGeneratedQuest = {
+  id: "generated-ball-roll",
+  title: "Roll and notice the soccer ball",
+  experienceMode: "guided_quest",
+  ageStage: "3-4y",
+  developmentalFocusIds: ["DEV.COG.CAUSE_EFFECT"],
+  parentFacingGoal: "Roll the soft ball gently and notice together where it stops.",
+  activitySummary: "A calm rolling-and-noticing game with the soft ball.",
+  materials: ["large_soft_ball"],
+  adultSafetyNote: "Stay within arm's reach and roll only on a clear floor.",
+  stopIf: ["The ball could roll toward stairs or breakable things."],
+  steps: [
+    { minute: 0, instruction: "Predict together how far the soccer ball will roll." },
+    { minute: 2, instruction: "A grown-up rolls it gently once and you watch where it stops." },
+  ],
+  evidencePrompt: "What did your child notice about where it stopped?",
+  parentReflectionPrompt: "What did you notice during the ball play? You can skip this.",
+  tool: {
+    kind: "predict",
+    title: "Where will it stop?",
+    prompt: "Choose a prediction, then try one gentle grown-up roll.",
+    accessibilityHint: "Each choice uses written words; choosing one records nothing.",
+    question: "Where do you think the soccer ball will stop?",
+    options: ["Near us", "Farther away"],
+  },
+  fallbackMessage: "Point to near or far, make one gentle roll, then notice together.",
+} as const;
+
 function responseFor(value: unknown): Response {
   return new Response(JSON.stringify({
     output: [{ type: "message", content: [{ type: "output_text", text: JSON.stringify(value) }] }],
@@ -105,31 +133,44 @@ describe("OpenAI server-only experience provider", () => {
     }
   });
 
-  it("selects only a reviewed template that matches the parent-approved context", async () => {
-    const fetchImpl = vi.fn(async () => responseFor({ templateId: "kitchen-sound-detectives" })) as unknown as typeof fetch;
-    await expect(provider(fetchImpl).selectExperience({ activityContext: context })).resolves.toEqual(kitchenSoundQuest);
-
-    const unsafe = { templateId: "ball-roll-predictions" };
-    const unsafeFetch = vi.fn(async () => responseFor(unsafe)) as unknown as typeof fetch;
-    await expect(provider(unsafeFetch).selectExperience({ activityContext: context })).rejects.toThrow(/does not match/);
+  it("returns the deterministic reviewed activity for the seeded prepared kit without any model call", async () => {
+    const seededContext = createKitchenSoundActivityContext({
+      materialSource: "seeded_demo",
+      confirmedMaterials: KITCHEN_SOUND_REQUIRED_MATERIALS,
+      approvedWeatherTags: ["rainy"],
+      parentConfirmedSafety: true,
+    });
+    const fetchImpl = vi.fn() as unknown as typeof fetch;
+    await expect(provider(fetchImpl).selectExperience({ activityContext: seededContext })).resolves.toEqual(kitchenSoundQuest);
+    expect(fetchImpl).not.toHaveBeenCalled();
   });
 
-  it("dispatches reviewed ball and generic templates without model-authored learner UI", async () => {
-    const ballContext = createApprovedActivityContext({
-      materialSource: "photo", confirmedMaterials: ["large_soft_ball"], approvedWeatherTags: ["rainy"], parentConfirmedSafety: true,
+  it("authors a validated activity for a live photo/typed context, passing object labels to the model", async () => {
+    const liveContext = createApprovedActivityContext({
+      materialSource: "photo",
+      confirmedMaterials: [{ allowedMaterialCategory: "large_soft_ball", label: "soccer ball" }],
+      approvedWeatherTags: ["rainy"],
+      parentConfirmedSafety: true,
     });
-    const ballFetch = vi.fn(async () => responseFor({ templateId: "ball-roll-predictions" })) as unknown as typeof fetch;
-    await expect(provider(ballFetch).selectExperience({ activityContext: ballContext })).resolves.toMatchObject({
-      id: "ball-roll-predictions", tool: { kind: "predict" },
+    const fetchImpl = vi.fn(async () => responseFor(validGeneratedQuest)) as unknown as typeof fetch;
+    await expect(provider(fetchImpl).selectExperience({ activityContext: liveContext })).resolves.toMatchObject({
+      experienceMode: "guided_quest", ageStage: "3-4y", tool: { kind: "predict" },
     });
+    const body = JSON.parse(String((fetchImpl as unknown as ReturnType<typeof vi.fn>).mock.calls[0]?.[1]?.body));
+    expect(body.text.format.name).toBe("generated_activity");
+    expect(body.store).toBe(false);
+    expect(JSON.stringify(body)).toContain("soccer ball");
+  });
 
-    const genericContext = createApprovedActivityContext({
-      materialSource: "typed", confirmedMaterials: ["board_book"], approvedWeatherTags: ["rainy"], parentConfirmedSafety: true,
+  it("rejects a generated activity that is not a valid quest", async () => {
+    const liveContext = createApprovedActivityContext({
+      materialSource: "photo",
+      confirmedMaterials: [{ allowedMaterialCategory: "large_soft_ball", label: "ball" }],
+      approvedWeatherTags: ["rainy"],
+      parentConfirmedSafety: true,
     });
-    const genericFetch = vi.fn(async () => responseFor({ templateId: "everyday-object-noticing" })) as unknown as typeof fetch;
-    await expect(provider(genericFetch).selectExperience({ activityContext: genericContext })).resolves.toMatchObject({
-      id: "everyday-object-noticing", materials: ["board_book"], tool: { kind: "predict" },
-    });
+    const fetchImpl = vi.fn(async () => responseFor({ templateId: "ball-roll-predictions" })) as unknown as typeof fetch;
+    await expect(provider(fetchImpl).selectExperience({ activityContext: liveContext })).rejects.toBeInstanceOf(Error);
   });
 
   it("maps transport and provider response failures to closed errors", async () => {

@@ -2,7 +2,48 @@ import sharp from "sharp";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { GET, POST } from "../src/app/api/live-experience/route";
-import { kitchenSoundActivityContext } from "../src/lib/demo/kitchen-sound-detectives";
+import {
+  KITCHEN_SOUND_REQUIRED_MATERIALS,
+  createKitchenSoundActivityContext,
+  kitchenSoundActivityContext,
+} from "../src/lib/demo/kitchen-sound-detectives";
+
+// A live (non-seeded) context so experience_selection authors a fresh activity
+// through the model instead of taking the deterministic prepared-kit path.
+const photoActivityContext = createKitchenSoundActivityContext({
+  materialSource: "photo",
+  confirmedMaterials: KITCHEN_SOUND_REQUIRED_MATERIALS,
+  approvedWeatherTags: ["rainy"],
+  parentConfirmedSafety: true,
+});
+
+const validGeneratedKitchenQuest = {
+  id: "generated-kitchen-activity",
+  title: "Compare two gentle kitchen sounds",
+  experienceMode: "guided_quest",
+  ageStage: "3-4y",
+  developmentalFocusIds: ["DEV.COG.CAUSE_EFFECT"],
+  parentFacingGoal: "Tap two safe items and notice which sounds boomy or soft.",
+  activitySummary: "A short sound-comparison game with the confirmed kitchen items.",
+  materials: ["large_empty_plastic_container", "soft_cloth"],
+  adultSafetyNote: "Stay within arm's reach and tap gently on a stable surface.",
+  stopIf: ["An item cracks or the play stops feeling calm."],
+  steps: [
+    { minute: 0, instruction: "Predict together which item will sound boomy." },
+    { minute: 3, instruction: "A grown-up taps each item gently and you choose a sound word." },
+  ],
+  evidencePrompt: "What sound word did your child choose?",
+  parentReflectionPrompt: "What did you notice during the sound play? You can skip this.",
+  tool: {
+    kind: "predict",
+    title: "Which one is boomy?",
+    prompt: "Choose a prediction, then tap gently with a grown-up.",
+    accessibilityHint: "Each choice uses written words; choosing one records nothing.",
+    question: "Which item will sound boomy?",
+    options: ["The container", "The cloth"],
+  },
+  fallbackMessage: "Tap each item gently and name one sound word together.",
+};
 
 const originalKey = process.env.OPENAI_API_KEY;
 const originalLiveSwitch = process.env.RUMMAGELAB_LIVE_OPENAI_ENABLED;
@@ -191,29 +232,44 @@ describe("live experience API route", () => {
     });
   });
 
-  it("falls back for a missing key or malformed provider activity without leaking raw errors", async () => {
+  it("falls back to a reviewed activity for a malformed generated activity without leaking raw errors", async () => {
     process.env.OPENAI_API_KEY = "test-key";
     process.env.RUMMAGELAB_LIVE_OPENAI_ENABLED = "true";
     vi.spyOn(globalThis, "fetch").mockResolvedValue(providerResponse({ raw: "secret-provider-output" }));
     const response = await POST(new Request("http://local/api/live-experience", {
       method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ operation: "experience_selection", fixtureId: "kitchen-sound-detectives", activityContext: kitchenSoundActivityContext }),
+      body: JSON.stringify({ operation: "experience_selection", fixtureId: "kitchen-sound-detectives", activityContext: photoActivityContext }),
     }));
     const text = await response.text();
     expect(JSON.parse(text).runtime.source).toBe("seeded_fallback");
     expect(text).not.toContain("secret-provider-output");
   });
 
-  it("keeps live JSON planning available only when both capability settings are present", async () => {
+  it("authors a live activity for a live context when both capability settings are present", async () => {
     process.env.OPENAI_API_KEY = "test-key";
     process.env.RUMMAGELAB_LIVE_OPENAI_ENABLED = "true";
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(providerResponse({ templateId: "kitchen-sound-detectives" }));
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(providerResponse(validGeneratedKitchenQuest));
+    const response = await POST(new Request("http://local/api/live-experience", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ operation: "experience_selection", fixtureId: "kitchen-sound-detectives", activityContext: photoActivityContext }),
+    }));
+    const body = await response.json();
+    expect(body.runtime.source).toBe("live_provider");
+    expect(body.experience.activitySummary).toBe("A short sound-comparison game with the confirmed kitchen items.");
+    expect(fetchSpy).toHaveBeenCalledOnce();
+  });
+
+  it("keeps the seeded prepared kit deterministic (no model call) even with live enabled", async () => {
+    process.env.OPENAI_API_KEY = "test-key";
+    process.env.RUMMAGELAB_LIVE_OPENAI_ENABLED = "true";
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
     const response = await POST(new Request("http://local/api/live-experience", {
       method: "POST", headers: { "content-type": "application/json" },
       body: JSON.stringify({ operation: "experience_selection", fixtureId: "kitchen-sound-detectives", activityContext: kitchenSoundActivityContext }),
     }));
-    expect((await response.json()).runtime.source).toBe("live_provider");
-    expect(fetchSpy).toHaveBeenCalledOnce();
+    const body = await response.json();
+    expect(body.experience.id).toBe("kitchen-sound-detectives");
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it("maps bounded safe typed labels live and blocks unsafe labels before the provider", async () => {

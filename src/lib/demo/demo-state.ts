@@ -1,16 +1,15 @@
 import type {
   ActivityContext,
-  AllowedMaterialCategory,
   NextActivityContext,
   ParentObservationSuggestion,
   QuestSpec,
 } from "../schemas";
 import {
-  KITCHEN_SOUND_REQUIRED_MATERIALS,
   KITCHEN_SOUND_SUGGESTED_WEATHER_TAGS,
   buildReviewedObservationSuggestion,
   createKitchenSoundNextSuggestion,
   kitchenSoundObservationFixture,
+  kitchenSoundPhotoInventory,
   type DemoObservationTag,
   type DemoWeatherTag,
   type KitchenSoundNextSuggestion,
@@ -19,8 +18,18 @@ import {
   canStartApprovedQuest,
   createApprovedActivityContext,
 } from "./approved-quest-templates";
-import type { MaterialIntakeSource } from "./material-intake";
+import {
+  dedupeVettedCandidates,
+  photoInventoryToCandidates,
+  type MaterialIntakeSource,
+  type VettedCandidate,
+} from "./material-intake";
 import type { DemoAgeStage } from "./age-stage-options";
+
+/** Prepared-kit candidates, derived from the seeded object inventory. */
+function seededKitchenCandidates(): VettedCandidate[] {
+  return photoInventoryToCandidates(kitchenSoundPhotoInventory);
+}
 
 export type KitchenSoundDemoPhase =
   | "kit_review"
@@ -41,8 +50,8 @@ export type KitchenSoundDemoState = {
   phase: KitchenSoundDemoPhase;
   selectedAgeStage: DemoAgeStage;
   materialSource: MaterialIntakeSource;
-  intakeCandidateMaterials: AllowedMaterialCategory[];
-  confirmedMaterials: AllowedMaterialCategory[];
+  intakeCandidates: VettedCandidate[];
+  confirmedObjects: VettedCandidate[];
   selectedWeatherTags: DemoWeatherTag[];
   parentApprovedWeather: boolean;
   parentConfirmedSafety: boolean;
@@ -62,13 +71,13 @@ export type KitchenSoundDemoAction =
       source: MaterialIntakeSource;
     }
   | {
-      type: "SET_MATERIAL_CANDIDATES";
-      materials: AllowedMaterialCategory[];
+      type: "SET_OBJECT_CANDIDATES";
+      candidates: VettedCandidate[];
     }
   | { type: "CLEAR_MATERIAL_CONFIRMATION" }
   | {
-      type: "TOGGLE_MATERIAL";
-      material: AllowedMaterialCategory;
+      type: "TOGGLE_OBJECT";
+      id: string;
     }
   | {
       type: "TOGGLE_WEATHER_TAG";
@@ -107,8 +116,8 @@ export function createInitialKitchenSoundDemoState(): KitchenSoundDemoState {
     phase: "kit_review",
     selectedAgeStage: "3-4y",
     materialSource: "seeded_demo",
-    intakeCandidateMaterials: [...KITCHEN_SOUND_REQUIRED_MATERIALS],
-    confirmedMaterials: [],
+    intakeCandidates: seededKitchenCandidates(),
+    confirmedObjects: [],
     selectedWeatherTags: [...KITCHEN_SOUND_SUGGESTED_WEATHER_TAGS],
     parentApprovedWeather: false,
     parentConfirmedSafety: false,
@@ -132,11 +141,16 @@ export function canStartKitchenSoundQuest(
   state: KitchenSoundDemoState,
 ): boolean {
   return state.phase === "kit_review" && state.selectedAgeStage === "3-4y" && canStartApprovedQuest({
-    confirmedMaterials: state.confirmedMaterials,
-    intakeCandidateMaterials: state.intakeCandidateMaterials,
+    confirmedObjects: state.confirmedObjects.map((object) => ({
+      id: object.id,
+      category: object.category,
+      label: object.label,
+    })),
+    candidateIds: state.intakeCandidates.map((candidate) => candidate.id),
     approvedWeatherTags: state.selectedWeatherTags,
     parentApprovedWeather: state.parentApprovedWeather,
     parentConfirmedSafety: state.parentConfirmedSafety,
+    materialSource: state.materialSource,
   });
 }
 
@@ -202,11 +216,11 @@ export function kitchenSoundDemoReducer(
         ? {
             ...state,
             selectedAgeStage: action.ageStage,
-            intakeCandidateMaterials:
+            intakeCandidates:
               action.ageStage === "3-4y" && state.materialSource === "seeded_demo"
-                ? [...KITCHEN_SOUND_REQUIRED_MATERIALS]
+                ? seededKitchenCandidates()
                 : [],
-            confirmedMaterials: [],
+            confirmedObjects: [],
             parentConfirmedSafety: false,
             activityContext: null,
             experience: null,
@@ -218,23 +232,21 @@ export function kitchenSoundDemoReducer(
         ? {
             ...state,
             materialSource: action.source,
-            intakeCandidateMaterials:
-              action.source === "seeded_demo"
-                ? [...KITCHEN_SOUND_REQUIRED_MATERIALS]
-                : [],
-            confirmedMaterials: [],
+            intakeCandidates:
+              action.source === "seeded_demo" ? seededKitchenCandidates() : [],
+            confirmedObjects: [],
             parentConfirmedSafety: false,
             activityContext: null,
             experience: null,
           }
         : state;
 
-    case "SET_MATERIAL_CANDIDATES":
+    case "SET_OBJECT_CANDIDATES":
       return state.phase === "kit_review"
         ? {
             ...state,
-            intakeCandidateMaterials: [...new Set(action.materials)],
-            confirmedMaterials: [],
+            intakeCandidates: dedupeVettedCandidates(action.candidates),
+            confirmedObjects: [],
             parentConfirmedSafety: false,
             activityContext: null,
             experience: null,
@@ -245,27 +257,28 @@ export function kitchenSoundDemoReducer(
       return state.phase === "kit_review"
         ? {
             ...state,
-            confirmedMaterials: [],
+            confirmedObjects: [],
             parentConfirmedSafety: false,
             activityContext: null,
             experience: null,
           }
         : state;
 
-    case "TOGGLE_MATERIAL": {
-      if (
-        state.phase !== "kit_review" ||
-        !state.intakeCandidateMaterials.includes(action.material)
-      ) {
+    case "TOGGLE_OBJECT": {
+      const candidate = state.intakeCandidates.find(
+        (item) => item.id === action.id,
+      );
+      if (state.phase !== "kit_review" || !candidate) {
         return state;
       }
-
+      const isConfirmed = state.confirmedObjects.some(
+        (object) => object.id === action.id,
+      );
       return {
         ...state,
-        confirmedMaterials: toggleValue(
-          state.confirmedMaterials,
-          action.material,
-        ),
+        confirmedObjects: isConfirmed
+          ? state.confirmedObjects.filter((object) => object.id !== action.id)
+          : [...state.confirmedObjects, candidate],
       };
     }
 
@@ -312,7 +325,10 @@ export function kitchenSoundDemoReducer(
       const activityContext = createApprovedActivityContext({
         ageStage: state.selectedAgeStage,
         materialSource: state.materialSource,
-        confirmedMaterials: state.confirmedMaterials,
+        confirmedMaterials: state.confirmedObjects.map((object) => ({
+          allowedMaterialCategory: object.category,
+          label: object.label,
+        })),
         approvedWeatherTags: state.selectedWeatherTags,
         parentConfirmedSafety: state.parentConfirmedSafety,
       });

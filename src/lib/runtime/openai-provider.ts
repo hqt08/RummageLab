@@ -4,15 +4,17 @@ import {
   type ExperienceRuntimeProvider,
 } from "./contracts";
 import {
-  ApprovedQuestTemplateSelectionSchema,
   availableApprovedQuestTemplateIds,
-  resolveApprovedQuestTemplate,
+  deterministicApprovedQuestForContext,
 } from "../demo/approved-quest-templates";
-import { AllowedMaterialCategorySchema, PhotoInventorySchema } from "../schemas";
+import { learningFocusCatalog } from "../data/learning-focuses";
+import { AllowedMaterialCategorySchema, PhotoInventorySchema, QuestSpecSchema } from "../schemas";
 import { RuntimeProviderFailure } from "./seeded-runtime";
 
 /** Single source of truth for the model-facing category enum (no hand copy). */
 const ALLOWED_MATERIAL_CATEGORY_ENUM = [...AllowedMaterialCategorySchema.options];
+/** Only human-curated developmental focus IDs may be authored by the model. */
+const DEVELOPMENTAL_FOCUS_ID_ENUM = learningFocusCatalog.map((focus) => focus.id);
 
 export type TransientObjectImage = {
   mimeType: "image/jpeg" | "image/png" | "image/webp";
@@ -77,12 +79,136 @@ export const PHOTO_INVENTORY_JSON_SCHEMA = {
   },
 } as const;
 
-const EXPERIENCE_TEMPLATE_JSON_SCHEMA = {
+const TOOL_BASE_PROPS = {
+  title: { type: "string", minLength: 1, maxLength: 80 },
+  prompt: { type: "string", minLength: 1, maxLength: 240 },
+  accessibilityHint: { type: "string", minLength: 1, maxLength: 180 },
+} as const;
+
+/** Mirrors RummageToolSpecSchema — one approved, non-executable renderer. */
+const TOOL_JSON_SCHEMA = {
+  anyOf: [
+    {
+      type: "object",
+      additionalProperties: false,
+      required: ["kind", "title", "prompt", "accessibilityHint", "categories", "items"],
+      properties: {
+        ...TOOL_BASE_PROPS,
+        kind: { type: "string", enum: ["sort"] },
+        categories: { type: "array", minItems: 2, maxItems: 4, items: { type: "string", minLength: 1, maxLength: 40 } },
+        items: { type: "array", minItems: 2, maxItems: 8, items: { type: "string", minLength: 1, maxLength: 60 } },
+      },
+    },
+    {
+      type: "object",
+      additionalProperties: false,
+      required: ["kind", "title", "prompt", "accessibilityHint", "unit", "targetLabel"],
+      properties: {
+        ...TOOL_BASE_PROPS,
+        kind: { type: "string", enum: ["measure"] },
+        unit: { type: "string", enum: ["cm", "in", "seconds", "grams", "observations"] },
+        targetLabel: { type: "string", minLength: 1, maxLength: 80 },
+      },
+    },
+    {
+      type: "object",
+      additionalProperties: false,
+      required: ["kind", "title", "prompt", "accessibilityHint", "question", "options"],
+      properties: {
+        ...TOOL_BASE_PROPS,
+        kind: { type: "string", enum: ["predict"] },
+        question: { type: "string", minLength: 1, maxLength: 180 },
+        options: { type: "array", minItems: 2, maxItems: 4, items: { type: "string", minLength: 1, maxLength: 80 } },
+      },
+    },
+    {
+      type: "object",
+      additionalProperties: false,
+      required: ["kind", "title", "prompt", "accessibilityHint", "soundLabels"],
+      properties: {
+        ...TOOL_BASE_PROPS,
+        kind: { type: "string", enum: ["sound_mix"] },
+        soundLabels: { type: "array", minItems: 2, maxItems: 4, items: { type: "string", minLength: 1, maxLength: 40 } },
+      },
+    },
+    {
+      type: "object",
+      additionalProperties: false,
+      required: ["kind", "title", "prompt", "accessibilityHint", "journalPrompt"],
+      properties: {
+        ...TOOL_BASE_PROPS,
+        kind: { type: "string", enum: ["field_journal"] },
+        journalPrompt: { type: "string", minLength: 1, maxLength: 240 },
+      },
+    },
+  ],
+} as const;
+
+/**
+ * Mirrors the 3–4y branch of QuestSpecSchema. The model authors the full
+ * activity, but every field is bounded, the tool is one of five approved
+ * renderers, materials/focus IDs are enum-constrained, and the result is
+ * re-validated against the parent-approved context server-side before render.
+ */
+const QUEST_GENERATION_JSON_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["templateId"],
+  required: [
+    "id",
+    "title",
+    "experienceMode",
+    "ageStage",
+    "developmentalFocusIds",
+    "parentFacingGoal",
+    "activitySummary",
+    "materials",
+    "adultSafetyNote",
+    "stopIf",
+    "steps",
+    "evidencePrompt",
+    "parentReflectionPrompt",
+    "tool",
+    "fallbackMessage",
+  ],
   properties: {
-    templateId: { type: "string", enum: ["kitchen-sound-detectives", "ball-roll-predictions", "everyday-object-noticing"] },
+    id: { type: "string", minLength: 1, maxLength: 80 },
+    title: { type: "string", minLength: 1, maxLength: 100 },
+    experienceMode: { type: "string", enum: ["guided_quest"] },
+    ageStage: { type: "string", enum: ["3-4y"] },
+    developmentalFocusIds: {
+      type: "array",
+      minItems: 1,
+      maxItems: 4,
+      items: { type: "string", enum: DEVELOPMENTAL_FOCUS_ID_ENUM },
+    },
+    parentFacingGoal: { type: "string", minLength: 1, maxLength: 240 },
+    activitySummary: { type: "string", minLength: 1, maxLength: 240 },
+    materials: {
+      type: "array",
+      minItems: 1,
+      maxItems: 5,
+      items: { type: "string", enum: ALLOWED_MATERIAL_CATEGORY_ENUM },
+    },
+    adultSafetyNote: { type: "string", minLength: 1, maxLength: 280 },
+    stopIf: { type: "array", minItems: 1, maxItems: 4, items: { type: "string", minLength: 1, maxLength: 160 } },
+    steps: {
+      type: "array",
+      minItems: 2,
+      maxItems: 6,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["minute", "instruction"],
+        properties: {
+          minute: { type: "integer", minimum: 0, maximum: 15 },
+          instruction: { type: "string", minLength: 1, maxLength: 280 },
+        },
+      },
+    },
+    evidencePrompt: { type: "string", minLength: 1, maxLength: 240 },
+    parentReflectionPrompt: { type: "string", minLength: 1, maxLength: 240 },
+    tool: TOOL_JSON_SCHEMA,
+    fallbackMessage: { type: "string", minLength: 1, maxLength: 240 },
   },
 } as const;
 
@@ -214,14 +340,35 @@ export function createOpenAIExperienceProvider(
     },
     async selectExperience(request) {
       const parsed = ExperienceRequestSchema.parse(request);
-      const allowedTemplateIds = availableApprovedQuestTemplateIds(parsed.activityContext);
-      if (allowedTemplateIds.length === 0) throw new RuntimeProviderFailure("provider_context_mismatch");
-      const result = ApprovedQuestTemplateSelectionSchema.parse(await requestStructured(
-        "reviewed_activity_template_selection",
-        EXPERIENCE_TEMPLATE_JSON_SCHEMA,
-        [{ type: "input_text", text: `Select exactly one reviewed activity template ID from ${JSON.stringify(allowedTemplateIds)} for this already validated, parent-approved context. Do not create instructions, objects, or a new template. Context: ${JSON.stringify(parsed.activityContext)}` }],
-      ));
-      return resolveApprovedQuestTemplate(result, parsed.activityContext);
+      const context = parsed.activityContext;
+      // A reviewed fallback must exist so a failed/rejected generation is
+      // always recoverable to a safe activity for this context.
+      if (availableApprovedQuestTemplateIds(context).length === 0) {
+        throw new RuntimeProviderFailure("provider_context_mismatch");
+      }
+      // The prepared kit stays fully deterministic (no model call) — the
+      // reliable judge/demo golden path. Live photo/typed intake gets a
+      // freshly authored, context-tailored activity instead.
+      if (context.materialSource === "seeded_demo") {
+        return deterministicApprovedQuestForContext(context);
+      }
+      const confirmed = context.confirmedMaterials.map((material) => ({
+        category: material.allowedMaterialCategory,
+        label: material.label ?? material.allowedMaterialCategory,
+      }));
+      const confirmedCategories = [...new Set(confirmed.map((item) => item.category))];
+      const weatherTags = context.weather?.approvedTags ?? [];
+      const raw = await requestStructured(
+        "generated_activity",
+        QUEST_GENERATION_JSON_SCHEMA,
+        [{
+          type: "input_text",
+          text: `Author one short, safe, grown-up-led activity for a ${context.ageStage} child, tailored to these parent-confirmed everyday objects and context. Refer to the objects by their labels in the steps. Rules: experienceMode "guided_quest"; ageStage "${context.ageStage}"; 2-6 steps, each minute within 0..${context.availableMinutes}; choose developmentalFocusIds only from ${JSON.stringify(DEVELOPMENTAL_FOCUS_ID_ENUM)}; use materials only from ${JSON.stringify(confirmedCategories)}; choose exactly one tool from sort, measure, predict, sound_mix, or field_journal; keep it ${context.setting}, calm, non-recording, and appropriate for the weather tags ${JSON.stringify(weatherTags)}. activitySummary is one short parent-facing sentence describing the activity. No URLs, code, brand names, or real names. Confirmed objects: ${JSON.stringify(confirmed.map((item) => item.label))}. Context: ${JSON.stringify(context)}`,
+        }],
+      );
+      // Structural parse here; resolveExperience re-validates against the
+      // parent-approved context (materials subset, focus catalogue, time window).
+      return QuestSpecSchema.parse(raw);
     },
   };
 }

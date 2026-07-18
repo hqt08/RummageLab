@@ -22,6 +22,8 @@ const QuestSpecBaseSchema = z.object({
   experienceMode: z.literal("guided_quest"),
   developmentalFocusIds: z.array(z.string().min(1).max(80)).min(1).max(4),
   parentFacingGoal: z.string().min(1).max(240),
+  /** Optional one-sentence, parent-facing synopsis for a generated activity. */
+  activitySummary: z.string().min(1).max(240).optional(),
   materials: z.array(AllowedMaterialCategorySchema).min(1).max(5),
   adultSafetyNote: z.string().min(1).max(280),
   stopIf: z.array(z.string().min(1).max(160)).min(1).max(4),
