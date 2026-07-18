@@ -482,8 +482,21 @@ export function KitchenSoundDemo() {
       return;
     }
 
+    // Galleries (iOS especially) can hand back valid image bytes with an empty
+    // or wrong MIME type. Rebuild the file with the sniffed type so the preview
+    // and the server upload carry a correct, supported content type.
+    const detectedType = contentValidation.detectedType;
+    const uploadFile =
+      file.type === detectedType
+        ? file
+        : new File(
+            [file],
+            file.name || `object-photo.${detectedType.split("/")[1]}`,
+            { type: detectedType },
+          );
+
     const nextPreviewUrl = createLocalPhotoPreview(
-      file,
+      uploadFile,
       null,
     );
     photoPreviewUrlRef.current = nextPreviewUrl;
@@ -518,8 +531,8 @@ export function KitchenSoundDemo() {
     }
 
     setPhotoPreviewUrl(nextPreviewUrl);
-    setPhotoFileName(file.name);
-    photoFileRef.current = file;
+    setPhotoFileName(uploadFile.name);
+    photoFileRef.current = uploadFile;
     setPhotoError(null);
     setAnnouncement(
       "Object photo ready as a local preview. Confirm the object-only boundary before live analysis.",

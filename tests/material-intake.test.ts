@@ -91,7 +91,7 @@ describe("local object-photo intake", () => {
     }
   });
 
-  it("rejects empty, oversized, and unsupported files", () => {
+  it("rejects empty and oversized files on size alone (type is not trusted)", () => {
     expect(validateLocalObjectPhoto({ size: 0, type: "image/jpeg" })).toMatchObject({
       ok: false,
       code: "empty",
@@ -102,21 +102,37 @@ describe("local object-photo intake", () => {
         type: "image/png",
       }),
     ).toMatchObject({ ok: false, code: "too_large" });
-    expect(
-      validateLocalObjectPhoto({ size: 1_024, type: "image/heic" }),
-    ).toMatchObject({ ok: false, code: "unsupported_type" });
+    // An empty or odd MIME type (as iOS galleries send) is not rejected here;
+    // the real format is decided from the bytes in content validation.
+    expect(validateLocalObjectPhoto({ size: 1_024, type: "" })).toEqual({ ok: true });
   });
 
-  it("verifies image signatures and bounded decoded dimensions", async () => {
-    const jpeg = new Blob([new Uint8Array([0xff, 0xd8, 0xff, 0x00])], {
-      type: "image/jpeg",
+  it("decides the image type from magic bytes, not the declared MIME type", async () => {
+    // A valid JPEG whose browser-reported type is empty (the iOS gallery case).
+    const jpegNoType = new Blob([new Uint8Array([0xff, 0xd8, 0xff, 0x00])], {
+      type: "",
     }) as Blob & { type: string };
+    const png = new Blob([
+      new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    ]) as Blob & { type: string };
+    const heic = new Blob([
+      new Uint8Array([0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70, 0x68, 0x65, 0x69, 0x63]),
+    ]) as Blob & { type: string };
     const disguisedText = new Blob(["not an image"], {
       type: "image/jpeg",
     }) as Blob & { type: string };
 
-    await expect(validateLocalObjectPhotoContent(jpeg)).resolves.toEqual({
+    await expect(validateLocalObjectPhotoContent(jpegNoType)).resolves.toMatchObject({
       ok: true,
+      detectedType: "image/jpeg",
+    });
+    await expect(validateLocalObjectPhotoContent(png)).resolves.toMatchObject({
+      ok: true,
+      detectedType: "image/png",
+    });
+    await expect(validateLocalObjectPhotoContent(heic)).resolves.toMatchObject({
+      ok: false,
+      code: "unsupported_type",
     });
     await expect(validateLocalObjectPhotoContent(disguisedText)).resolves.toMatchObject({
       ok: false,

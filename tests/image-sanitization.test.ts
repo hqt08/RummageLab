@@ -86,6 +86,20 @@ describe("sanitizeObjectPhoto", () => {
     );
   });
 
+  it("accepts valid image bytes even when the browser sends no MIME type", async () => {
+    const jpeg = await sharp({
+      create: { width: 10, height: 10, channels: 3, background: "white" },
+    })
+      .jpeg()
+      .toBuffer();
+
+    const result = await sanitizeObjectPhoto({
+      bytes: new Uint8Array(jpeg),
+      declaredType: "",
+    });
+    expect(result.mediaType).toBe("image/jpeg");
+  });
+
   it("rejects decoded dimensions beyond the reviewed limits", async () => {
     const tooWide = await sharp({
       create: {

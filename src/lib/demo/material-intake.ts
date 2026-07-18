@@ -166,27 +166,21 @@ export function guardTypedObjectLabels(rawInput: string):
   return { safe: true, objectLabels };
 }
 
+/**
+ * Only the file's size is trusted here. The declared MIME type is intentionally
+ * ignored because mobile galleries (notably iOS) hand back valid JPEG/PNG/WebP
+ * bytes with an empty or non-standard `type`. The real format is decided from
+ * the file's magic bytes in {@link validateLocalObjectPhotoContent}.
+ */
 export function validateLocalObjectPhoto(file: {
   size: number;
-  type: string;
+  type?: string;
 }): LocalPhotoValidation {
   if (file.size <= 0) {
     return {
       ok: false,
       code: "empty",
       message: "That image is empty. Choose a JPEG, PNG, or WebP photo.",
-    };
-  }
-
-  if (
-    !LOCAL_OBJECT_PHOTO_ACCEPTED_TYPES.some(
-      (acceptedType) => acceptedType === file.type,
-    )
-  ) {
-    return {
-      ok: false,
-      code: "unsupported_type",
-      message: "Use a JPEG, PNG, or WebP object photo.",
     };
   }
 
@@ -205,25 +199,53 @@ function bytesStartWith(bytes: Uint8Array, signature: readonly number[]): boolea
   return signature.every((value, index) => bytes[index] === value);
 }
 
-export async function validateLocalObjectPhotoContent(
-  file: Blob & { type: string },
-): Promise<LocalPhotoValidation> {
-  const bytes = new Uint8Array(await file.slice(0, 12).arrayBuffer());
-  const hasExpectedSignature =
-    (file.type === "image/jpeg" && bytesStartWith(bytes, [0xff, 0xd8, 0xff])) ||
-    (file.type === "image/png" &&
-      bytesStartWith(bytes, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) ||
-    (file.type === "image/webp" &&
-      bytesStartWith(bytes, [0x52, 0x49, 0x46, 0x46]) &&
-      bytesStartWith(bytes.slice(8), [0x57, 0x45, 0x42, 0x50]));
+export type SniffedImageType = (typeof LOCAL_OBJECT_PHOTO_ACCEPTED_TYPES)[number];
 
-  return hasExpectedSignature
-    ? { ok: true }
-    : {
-        ok: false,
-        code: "invalid_content",
-        message: "That file does not appear to be a valid JPEG, PNG, or WebP image.",
-      };
+/** Identify a supported image purely from its leading bytes, ignoring MIME. */
+export function sniffImageType(bytes: Uint8Array): SniffedImageType | null {
+  if (bytesStartWith(bytes, [0xff, 0xd8, 0xff])) return "image/jpeg";
+  if (bytesStartWith(bytes, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) {
+    return "image/png";
+  }
+  if (
+    bytesStartWith(bytes, [0x52, 0x49, 0x46, 0x46]) &&
+    bytesStartWith(bytes.slice(8), [0x57, 0x45, 0x42, 0x50])
+  ) {
+    return "image/webp";
+  }
+  return null;
+}
+
+/** True for an ISO-BMFF/`ftyp` container such as HEIC/HEIF the demo can't decode. */
+function looksLikeHeic(bytes: Uint8Array): boolean {
+  return bytes.length >= 12 && bytesStartWith(bytes.slice(4), [0x66, 0x74, 0x79, 0x70]);
+}
+
+export type LocalPhotoContentValidation =
+  | { ok: true; detectedType: SniffedImageType }
+  | Extract<LocalPhotoValidation, { ok: false }>;
+
+export async function validateLocalObjectPhotoContent(
+  file: Blob & { type?: string },
+): Promise<LocalPhotoContentValidation> {
+  const bytes = new Uint8Array(await file.slice(0, 16).arrayBuffer());
+  const detectedType = sniffImageType(bytes);
+  if (detectedType) {
+    return { ok: true, detectedType };
+  }
+  if (looksLikeHeic(bytes)) {
+    return {
+      ok: false,
+      code: "unsupported_type",
+      message:
+        "That looks like a HEIC/HEIF photo. Choose a JPEG, PNG, or WebP, or retake the photo.",
+    };
+  }
+  return {
+    ok: false,
+    code: "invalid_content",
+    message: "That file does not appear to be a valid JPEG, PNG, or WebP image.",
+  };
 }
 
 export function validateLocalObjectPhotoDimensions(dimensions: {

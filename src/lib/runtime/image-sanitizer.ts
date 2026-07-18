@@ -30,13 +30,22 @@ export type SanitizedObjectPhoto = {
   mediaType: "image/jpeg";
 };
 
-function expectedFormat(
-  declaredType: string,
-): (typeof supportedTypes)[keyof typeof supportedTypes] {
+type SupportedFormat = (typeof supportedTypes)[keyof typeof supportedTypes];
+
+function isSupportedFormat(format: string | undefined): format is SupportedFormat {
+  return format === "jpeg" || format === "png" || format === "webp";
+}
+
+/**
+ * A non-empty declared type must be a supported one. An empty/absent declared
+ * type is tolerated here (mobile galleries send valid image bytes with no MIME);
+ * the authoritative format check happens against the decoded bytes below.
+ */
+function declaredFormatOrNull(declaredType: string): SupportedFormat | null {
+  if (declaredType === "") return null;
   if (!(declaredType in supportedTypes)) {
     throw new ImageSanitizationError("unsupported_type");
   }
-
   return supportedTypes[declaredType as keyof typeof supportedTypes];
 }
 
@@ -56,7 +65,7 @@ export async function sanitizeObjectPhoto(input: {
     throw new ImageSanitizationError("too_large");
   }
 
-  const format = expectedFormat(input.declaredType);
+  const declaredFormat = declaredFormatOrNull(input.declaredType);
 
   try {
     const image = sharp(input.bytes, {
@@ -67,7 +76,12 @@ export async function sanitizeObjectPhoto(input: {
     });
     const metadata = await image.metadata();
 
-    if (metadata.format !== format || !metadata.width || !metadata.height) {
+    // The decoded bytes are authoritative. Accept only real JPEG/PNG/WebP, and
+    // if a supported type was declared it must agree with what the bytes are.
+    if (!isSupportedFormat(metadata.format) || !metadata.width || !metadata.height) {
+      throw new ImageSanitizationError("invalid_content");
+    }
+    if (declaredFormat && metadata.format !== declaredFormat) {
       throw new ImageSanitizationError("invalid_content");
     }
     if ((metadata.pages ?? 1) !== 1) {
