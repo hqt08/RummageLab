@@ -32,8 +32,7 @@ describe("reviewed activity template dispatch", () => {
     const approved = context(["large_soft_ball"]);
     expect(availableApprovedQuestTemplateIds(approved)).toEqual(["ball-roll-predictions"]);
     const quest = resolveApprovedQuestTemplate({ templateId: "ball-roll-predictions" }, approved);
-    expect(quest.tool.kind).toBe("predict");
-    expect(quest.materials).toEqual(["large_soft_ball"]);
+    expect(quest).toMatchObject({ tool: { kind: "predict" }, materials: ["large_soft_ball"] });
     expect(() => resolveApprovedQuestTemplate({ templateId: "everyday-object-noticing" }, approved)).toThrow(/does not match/);
   });
 
@@ -41,8 +40,7 @@ describe("reviewed activity template dispatch", () => {
     const approved = context(["board_book"]);
     expect(availableApprovedQuestTemplateIds(approved)).toEqual(["everyday-object-noticing"]);
     const quest = deterministicApprovedQuestForContext(approved);
-    expect(quest).toMatchObject({ id: "everyday-object-noticing", materials: ["board_book"] });
-    expect(quest.tool.kind).toBe("predict");
+    expect(quest).toMatchObject({ id: "everyday-object-noticing", materials: ["board_book"], tool: { kind: "predict" } });
     expect(quest.parentFacingGoal).toContain("board book");
   });
 });

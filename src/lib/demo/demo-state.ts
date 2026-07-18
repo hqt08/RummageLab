@@ -1,8 +1,8 @@
 import type {
   ActivityContext,
+  ExperienceSpec,
   NextActivityContext,
   ParentObservationSuggestion,
-  QuestSpec,
 } from "../schemas";
 import {
   KITCHEN_SOUND_SUGGESTED_WEATHER_TAGS,
@@ -21,14 +21,32 @@ import {
 import {
   dedupeVettedCandidates,
   photoInventoryToCandidates,
+  vettedCandidateId,
   type MaterialIntakeSource,
   type VettedCandidate,
 } from "./material-intake";
+import { isUnderThreeCategory } from "./age-band-fallbacks";
 import type { DemoAgeStage } from "./age-stage-options";
 
 /** Prepared-kit candidates, derived from the seeded object inventory. */
 function seededKitchenCandidates(): VettedCandidate[] {
   return photoInventoryToCandidates(kitchenSoundPhotoInventory);
+}
+
+/** Prepared large, soft under-three kit for the 0–1 and 1–2 bands. */
+function seededUnderThreeCandidates(): VettedCandidate[] {
+  return [
+    { id: vettedCandidateId("Clean, folded dish towel"), label: "Clean, folded dish towel", category: "soft_cloth", safetyLevel: "ok", warnings: [] },
+    { id: vettedCandidateId("Board book"), label: "Board book", category: "board_book", safetyLevel: "ok", warnings: [] },
+    { id: vettedCandidateId("Large soft ball"), label: "Large soft ball", category: "large_soft_ball", safetyLevel: "ok", warnings: [] },
+  ];
+}
+
+/** Prepared-kit candidates appropriate to the selected age band. */
+export function seededCandidatesForAge(ageStage: DemoAgeStage): VettedCandidate[] {
+  return ageStage === "0-12m" || ageStage === "12-36m"
+    ? seededUnderThreeCandidates()
+    : seededKitchenCandidates();
 }
 
 export type KitchenSoundDemoPhase =
@@ -56,7 +74,7 @@ export type KitchenSoundDemoState = {
   parentApprovedWeather: boolean;
   parentConfirmedSafety: boolean;
   activityContext: ActivityContext | null;
-  experience: QuestSpec | null;
+  experience: ExperienceSpec | null;
   reflectionSkipped: boolean;
   observationDraft: ObservationDraft | null;
   reviewedObservation: ParentObservationSuggestion | null;
@@ -91,7 +109,7 @@ export type KitchenSoundDemoAction =
       type: "SET_SAFETY_CONFIRMED";
       confirmed: boolean;
     }
-  | { type: "START_QUEST"; experience?: QuestSpec }
+  | { type: "START_QUEST"; experience?: ExperienceSpec }
   | { type: "FINISH_QUEST" }
   | { type: "SKIP_REFLECTION" }
   | { type: "REVIEW_SEEDED_OBSERVATION" }
@@ -140,7 +158,7 @@ function toggleValue<T>(values: readonly T[], value: T): T[] {
 export function canStartKitchenSoundQuest(
   state: KitchenSoundDemoState,
 ): boolean {
-  return state.phase === "kit_review" && state.selectedAgeStage === "3-4y" && canStartApprovedQuest({
+  return state.phase === "kit_review" && canStartApprovedQuest({
     confirmedObjects: state.confirmedObjects.map((object) => ({
       id: object.id,
       category: object.category,
@@ -151,6 +169,7 @@ export function canStartKitchenSoundQuest(
     parentApprovedWeather: state.parentApprovedWeather,
     parentConfirmedSafety: state.parentConfirmedSafety,
     materialSource: state.materialSource,
+    ageStage: state.selectedAgeStage,
   });
 }
 
@@ -217,8 +236,8 @@ export function kitchenSoundDemoReducer(
             ...state,
             selectedAgeStage: action.ageStage,
             intakeCandidates:
-              action.ageStage === "3-4y" && state.materialSource === "seeded_demo"
-                ? seededKitchenCandidates()
+              state.materialSource === "seeded_demo"
+                ? seededCandidatesForAge(action.ageStage)
                 : [],
             confirmedObjects: [],
             parentConfirmedSafety: false,
@@ -233,7 +252,9 @@ export function kitchenSoundDemoReducer(
             ...state,
             materialSource: action.source,
             intakeCandidates:
-              action.source === "seeded_demo" ? seededKitchenCandidates() : [],
+              action.source === "seeded_demo"
+                ? seededCandidatesForAge(state.selectedAgeStage)
+                : [],
             confirmedObjects: [],
             parentConfirmedSafety: false,
             activityContext: null,
@@ -269,6 +290,12 @@ export function kitchenSoundDemoReducer(
         (item) => item.id === action.id,
       );
       if (state.phase !== "kit_review" || !candidate) {
+        return state;
+      }
+      // Under-three bands may confirm only the smaller approved allowlist.
+      const underThreeBand =
+        state.selectedAgeStage === "0-12m" || state.selectedAgeStage === "12-36m";
+      if (underThreeBand && !isUnderThreeCategory(candidate.category)) {
         return state;
       }
       const isConfirmed = state.confirmedObjects.some(
