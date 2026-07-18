@@ -84,6 +84,20 @@ describe("OpenAI server-only experience provider", () => {
     });
   });
 
+  it("sends the owner-configured model tier when one is provided", async () => {
+    const liveInventory = { ...kitchenSoundPhotoInventory, imageMode: "live" as const };
+    const fetchImpl = vi.fn(async () => responseFor(liveInventory)) as unknown as typeof fetch;
+    const configured = createOpenAIExperienceProvider({
+      apiKey: "development-key",
+      model: "gpt-5.6-fast",
+      transientImage: { mimeType: "image/jpeg", base64: "sanitized-pixels" },
+      fetchImpl,
+    });
+    await configured.getPhotoInventory({ mode: "live_transient_object_upload", ageStage: "3-4y", objectOnly: true });
+    const body = JSON.parse(String((fetchImpl as unknown as ReturnType<typeof vi.fn>).mock.calls[0]?.[1]?.body));
+    expect(body.model).toBe("gpt-5.6-fast");
+  });
+
   it("does not call the network without a key", async () => {
     const fetchImpl = vi.fn() as unknown as typeof fetch;
     await expect(provider(fetchImpl, " ").getPhotoInventory({

@@ -29,7 +29,11 @@ export type OpenAIProviderOptions = {
   transientImage: TransientObjectImage;
   fetchImpl?: typeof fetch;
   timeoutMs?: number;
+  /** Model id for the Responses API. Owner-configurable to select a faster tier. */
+  model?: string;
 };
+
+export const DEFAULT_OPENAI_MODEL = "gpt-5.6";
 
 export const PHOTO_INVENTORY_JSON_SCHEMA = {
   type: "object",
@@ -269,7 +273,7 @@ export function createOpenAIExperienceProvider(
           "content-type": "application/json",
         },
         body: JSON.stringify({
-          model: "gpt-5.6",
+          model: options.model?.trim() || DEFAULT_OPENAI_MODEL,
           store: false,
           input: [{ role: "user", content }],
           text: { format: { type: "json_schema", name, strict: true, schema } },

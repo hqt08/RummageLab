@@ -871,6 +871,43 @@ legend {
   color: var(--ink);
 }
 
+.loading-spinner {
+  display: inline-block;
+  width: 1.05rem;
+  height: 1.05rem;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--teal) 30%, transparent);
+  border-top-color: var(--teal);
+  animation: rl-spin 0.7s linear infinite;
+  vertical-align: -0.15rem;
+}
+
+.loading-spinner--inline {
+  width: 0.85rem;
+  height: 0.85rem;
+  margin-right: 0.45rem;
+  border-color: color-mix(in srgb, var(--paper-light) 45%, transparent);
+  border-top-color: var(--paper-light);
+}
+
+.runtime-loading {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+@keyframes rl-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading-spinner {
+    animation-duration: 2.4s;
+  }
+}
+
 .context-block {
   margin-top: 1.2rem;
   padding-top: 1.2rem;

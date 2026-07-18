@@ -145,6 +145,7 @@ export async function POST(request: Request) {
     try {
       const provider = createOpenAIExperienceProvider({
         apiKey: capability.apiKey,
+        model: capability.model,
         transientImage: {
           mimeType: sanitized.mediaType,
           base64: Buffer.from(sanitized.bytes).toString("base64"),
@@ -176,6 +177,7 @@ export async function POST(request: Request) {
       try {
         const provider = createOpenAIExperienceProvider({
           apiKey: capability.apiKey,
+          model: capability.model,
           transientImage: { mimeType: "image/jpeg", base64: "" },
         });
         const inventory = validateLivePhotoInventory(await provider.getPhotoInventory({
@@ -198,6 +200,7 @@ export async function POST(request: Request) {
     }
     const provider = createOpenAIExperienceProvider({
       apiKey: capability.apiKey,
+      model: capability.model,
       transientImage: { mimeType: "image/jpeg", base64: "" },
     });
     const result = await resolveExperience({
