@@ -46,7 +46,8 @@ body {
 
 button,
 input,
-textarea {
+textarea,
+select {
   font: inherit;
 }
 
@@ -274,6 +275,91 @@ textarea:focus-visible,
     var(--ink);
   border: 1.5px solid var(--ink);
   box-shadow: 5px 5px 0 var(--mustard);
+}
+
+.age-stage-desk {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(12rem, 0.7fr);
+  gap: 1rem;
+  align-items: end;
+  margin: 1.25rem 0 1.5rem;
+  padding: clamp(1rem, 4vw, 1.35rem);
+  background: rgba(255, 250, 240, 0.72);
+  border: 1.5px solid var(--ink);
+  box-shadow: 5px 5px 0 var(--rain);
+}
+
+.age-stage-field {
+  display: grid;
+  gap: 0.4rem;
+  align-self: start;
+  font-size: 0.76rem;
+  font-weight: 850;
+}
+
+.age-stage-field select {
+  min-height: 48px;
+  padding: 0.55rem 2.35rem 0.55rem 0.7rem;
+  color: var(--ink);
+  background: var(--paper-light);
+  border: 1.5px solid var(--ink);
+  border-radius: 0;
+  font-weight: 800;
+}
+
+.age-focus-card {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.78rem;
+  background: rgba(184, 212, 209, 0.34);
+  border-left: 4px solid var(--teal);
+}
+
+.age-focus-card strong {
+  font-family: var(--display);
+  font-size: clamp(1.2rem, 4vw, 1.55rem);
+  line-height: 1;
+}
+
+.age-focus-card p,
+.age-stage-note p,
+.activity-unlocked p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+
+.age-stage-note,
+.activity-unlocked {
+  display: grid;
+  gap: 0.6rem;
+  max-width: 46rem;
+  margin: 1.25rem 0;
+  padding: clamp(1rem, 4vw, 1.35rem);
+  background: rgba(225, 172, 61, 0.18);
+  border: 1.5px dashed var(--ink);
+}
+
+.age-stage-note h2,
+.activity-unlocked h3 {
+  margin: 0;
+  font-family: var(--display);
+  font-size: clamp(1.5rem, 6vw, 2.2rem);
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+
+.activity-unlocked {
+  margin: 0.2rem 0 1.15rem;
+  background: rgba(184, 212, 209, 0.32);
+  border-style: solid;
+  border-color: var(--teal);
+}
+
+.activity-unlocked .case-meta {
+  margin: 0.15rem 0 0;
 }
 
 .intake-desk::after {

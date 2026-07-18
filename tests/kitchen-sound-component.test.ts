@@ -38,12 +38,20 @@ describe("KitchenSoundDemo", () => {
     });
   });
 
-  it("renders the honest seeded kit-review boundary and accessible controls", () => {
+  it("starts with age-stage context and keeps the named activity hidden until its kit is confirmed", () => {
     const html = renderToStaticMarkup(createElement(KitchenSoundDemo));
 
     expect(html).toContain("Seeded demo");
     expect(html).toContain("no live photo, weather, voice, or GPT analysis");
-    expect(html).toContain("Kitchen Sound Detectives");
+    expect(html).toContain("What kind of discovery fits today?");
+    expect(html).toContain("Ages 0–1");
+    expect(html).toContain("Ages 1–2");
+    expect(html).toContain("Ages 3–4");
+    expect(html).toContain("Ages 5–6");
+    expect(html).toContain("Prediction &amp; noticing");
+    expect(html).not.toContain("Kitchen Sound Detectives");
+    expect(html).not.toContain("8 minutes");
+    expect(html).not.toContain("Indoors");
     expect(html).toContain("Rummage your way in");
     expect(html).toContain("Use the prepared kit");
     expect(html).toContain("Take or choose an object photo");

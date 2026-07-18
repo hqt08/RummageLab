@@ -34,13 +34,14 @@ function hasExactKitchenSoundKit(materials: readonly AllowedMaterialCategory[]):
 }
 
 export function createApprovedActivityContext(input: {
+  ageStage?: ActivityContext["ageStage"];
   materialSource: MaterialIntakeSource;
   confirmedMaterials: readonly AllowedMaterialCategory[];
   approvedWeatherTags: ApprovedWeatherTags;
   parentConfirmedSafety: boolean;
 }): ActivityContext {
   return ActivityContextSchema.parse({
-    ageStage: "3-4y",
+    ageStage: input.ageStage ?? "3-4y",
     materialSource: input.materialSource,
     confirmedMaterials: input.confirmedMaterials.map((allowedMaterialCategory) => ({
       allowedMaterialCategory,

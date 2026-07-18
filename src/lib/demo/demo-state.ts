@@ -20,6 +20,7 @@ import {
   createApprovedActivityContext,
 } from "./approved-quest-templates";
 import type { MaterialIntakeSource } from "./material-intake";
+import type { DemoAgeStage } from "./age-stage-options";
 
 export type KitchenSoundDemoPhase =
   | "kit_review"
@@ -38,6 +39,7 @@ export type ObservationDraft = {
 
 export type KitchenSoundDemoState = {
   phase: KitchenSoundDemoPhase;
+  selectedAgeStage: DemoAgeStage;
   materialSource: MaterialIntakeSource;
   intakeCandidateMaterials: AllowedMaterialCategory[];
   confirmedMaterials: AllowedMaterialCategory[];
@@ -54,6 +56,7 @@ export type KitchenSoundDemoState = {
 };
 
 export type KitchenSoundDemoAction =
+  | { type: "SET_AGE_STAGE"; ageStage: DemoAgeStage }
   | {
       type: "SET_MATERIAL_SOURCE";
       source: MaterialIntakeSource;
@@ -102,6 +105,7 @@ export type KitchenSoundDemoAction =
 export function createInitialKitchenSoundDemoState(): KitchenSoundDemoState {
   return {
     phase: "kit_review",
+    selectedAgeStage: "3-4y",
     materialSource: "seeded_demo",
     intakeCandidateMaterials: [...KITCHEN_SOUND_REQUIRED_MATERIALS],
     confirmedMaterials: [],
@@ -127,7 +131,7 @@ function toggleValue<T>(values: readonly T[], value: T): T[] {
 export function canStartKitchenSoundQuest(
   state: KitchenSoundDemoState,
 ): boolean {
-  return state.phase === "kit_review" && canStartApprovedQuest({
+  return state.phase === "kit_review" && state.selectedAgeStage === "3-4y" && canStartApprovedQuest({
     confirmedMaterials: state.confirmedMaterials,
     intakeCandidateMaterials: state.intakeCandidateMaterials,
     approvedWeatherTags: state.selectedWeatherTags,
@@ -193,6 +197,22 @@ export function kitchenSoundDemoReducer(
   }
 
   switch (action.type) {
+    case "SET_AGE_STAGE":
+      return state.phase === "kit_review"
+        ? {
+            ...state,
+            selectedAgeStage: action.ageStage,
+            intakeCandidateMaterials:
+              action.ageStage === "3-4y" && state.materialSource === "seeded_demo"
+                ? [...KITCHEN_SOUND_REQUIRED_MATERIALS]
+                : [],
+            confirmedMaterials: [],
+            parentConfirmedSafety: false,
+            activityContext: null,
+            experience: null,
+          }
+        : state;
+
     case "SET_MATERIAL_SOURCE":
       return state.phase === "kit_review"
         ? {
@@ -290,6 +310,7 @@ export function kitchenSoundDemoReducer(
       }
 
       const activityContext = createApprovedActivityContext({
+        ageStage: state.selectedAgeStage,
         materialSource: state.materialSource,
         confirmedMaterials: state.confirmedMaterials,
         approvedWeatherTags: state.selectedWeatherTags,

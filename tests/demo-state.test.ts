@@ -42,6 +42,19 @@ function reflectionState(): KitchenSoundDemoState {
 }
 
 describe("Kitchen Sound Detectives confirmation gates", () => {
+  it("clears the current kit when a parent changes age stage and limits this reviewed quest to ages 3–4", () => {
+    const ready = readyKitState();
+    const infantStage = kitchenSoundDemoReducer(ready, {
+      type: "SET_AGE_STAGE",
+      ageStage: "0-12m",
+    });
+
+    expect(infantStage.selectedAgeStage).toBe("0-12m");
+    expect(infantStage.confirmedMaterials).toEqual([]);
+    expect(infantStage.parentConfirmedSafety).toBe(false);
+    expect(canStartKitchenSoundQuest(infantStage)).toBe(false);
+  });
+
   it("does not start until materials, weather, and safety are parent-confirmed", () => {
     const initial = createInitialKitchenSoundDemoState();
     const attempted = kitchenSoundDemoReducer(initial, { type: "START_QUEST" });

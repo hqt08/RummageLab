@@ -22,11 +22,17 @@ import {
 import {
   KITCHEN_SOUND_DEMO_LOCATION_LABEL,
   KITCHEN_SOUND_AVAILABLE_WEATHER_TAGS,
+  KITCHEN_SOUND_REQUIRED_MATERIALS,
   kitchenSoundPhotoInventory,
   kitchenSoundQuest,
   type DemoObservationTag,
   type DemoWeatherTag,
 } from "../lib/demo/kitchen-sound-detectives";
+import {
+  demoAgeStageOptions,
+  findDemoAgeStageOption,
+  type DemoAgeStage,
+} from "../lib/demo/age-stage-options";
 import {
   createApprovedActivityContext,
   deterministicApprovedQuestForContext,
@@ -117,7 +123,7 @@ const observationTagLabels: Record<DemoObservationTag, string> = {
 };
 
 const phaseProgress: Record<KitchenSoundDemoPhase, string> = {
-  kit_review: "Case file 1 of 4 · Review the kit",
+  kit_review: "Start with your child’s stage",
   quest: "Case file 2 of 4 · Follow the sounds",
   reflection: "Case file 3 of 4 · Parent choice",
   observation_review: "Case file 3 of 4 · Review what you noticed",
@@ -351,6 +357,26 @@ export function KitchenSoundDemo() {
     setAnnouncement(`${intakeChoiceCopy[source].label} selected.`);
   }
 
+  function chooseAgeStage(ageStage: DemoAgeStage) {
+    runtimeRequestVersionRef.current += 1;
+    releaseLocalPhotoPreview(photoPreviewUrlRef.current);
+    photoPreviewUrlRef.current = null;
+    setPhotoPreviewUrl(null);
+    setPhotoFileName("");
+    setPhotoError(null);
+    setLiveInventory(null);
+    setTypedMaterialText("");
+    setTypedLiveInventory(null);
+    setTypedInventoryStatus("idle");
+    setTypedInventoryMessage(null);
+    setObjectOnlyConsent(false);
+    setLiveSource(null);
+    photoFileRef.current = null;
+    if (photoInputRef.current) photoInputRef.current.value = "";
+    transitionDemo({ type: "SET_AGE_STAGE", ageStage });
+    setAnnouncement(`${findDemoAgeStageOption(ageStage).label} selected.`);
+  }
+
   function updateTypedMaterials(value: string) {
     runtimeRequestVersionRef.current += 1;
     const normalization = normalizeKitchenSoundTypedMaterials(value);
@@ -550,6 +576,7 @@ export function KitchenSoundDemo() {
     }
     if (!livePhotoAnalysisAvailable) {
       const activityContext = createApprovedActivityContext({
+        ageStage: state.selectedAgeStage,
         materialSource: state.materialSource,
         confirmedMaterials: state.confirmedMaterials,
         approvedWeatherTags: state.selectedWeatherTags,
@@ -569,6 +596,7 @@ export function KitchenSoundDemo() {
     setRuntimePreviewStatus("loading");
     setAnnouncement("Preparing a validated activity from parent-confirmed context.");
     const activityContext = createApprovedActivityContext({
+      ageStage: state.selectedAgeStage,
       materialSource: state.materialSource,
       confirmedMaterials: state.confirmedMaterials,
       approvedWeatherTags: state.selectedWeatherTags,
@@ -607,6 +635,7 @@ export function KitchenSoundDemo() {
       setTypedMaterialText("");
     }
     const activityContext = createApprovedActivityContext({
+      ageStage: state.selectedAgeStage,
       materialSource: state.materialSource,
       confirmedMaterials: state.confirmedMaterials,
       approvedWeatherTags: state.selectedWeatherTags,
@@ -700,8 +729,16 @@ export function KitchenSoundDemo() {
     }
   }
 
+  const selectedAgeOption = findDemoAgeStageOption(state.selectedAgeStage);
+  const isKitchenSoundAge = state.selectedAgeStage === "3-4y";
+  const hasKitchenSoundKit =
+    state.confirmedMaterials.length === KITCHEN_SOUND_REQUIRED_MATERIALS.length &&
+    KITCHEN_SOUND_REQUIRED_MATERIALS.every((material) =>
+      state.confirmedMaterials.includes(material),
+    );
   const canStart = canStartKitchenSoundQuest(state);
   const gateParts = [
+    !isKitchenSoundAge ? "Ages 3–4 for this guided sound quest" : null,
     state.materialSource === "photo" && !photoPreviewUrl
       ? "an object-only photo"
       : null,
@@ -800,18 +837,49 @@ export function KitchenSoundDemo() {
         {state.phase === "kit_review" ? (
           <section className="stage" data-phase="kit-review">
             <StageHeader
-              deck="Turn three ordinary kitchen things into an 8-minute sound hunt—grown-up led, screen-light, and ready without an API key."
+              deck="Choose an age band first. Then use ordinary objects to unlock a short, parent-led activity that fits this public demo."
               eyebrow={phaseProgress[state.phase]}
               headingRef={stageHeadingRef}
-              title="Kitchen Sound Detectives"
+              title="What kind of discovery fits today?"
             />
 
-            <ul className="case-meta" aria-label="Activity details">
-              <li>Ages 3–4</li>
-              <li>8 minutes</li>
-              <li>Grown-up co-play</li>
-              <li>Indoors</li>
-            </ul>
+            <section className="age-stage-desk" aria-labelledby="age-stage-title">
+              <div>
+                <p className="panel-kicker">Choose a starting stage</p>
+                <h2 className="intake-title" id="age-stage-title">Your child sets the lens.</h2>
+              </div>
+              <label className="age-stage-field">
+                <span>Age band</span>
+                <select
+                  aria-describedby="age-stage-description"
+                  onChange={(event) => chooseAgeStage(event.currentTarget.value as DemoAgeStage)}
+                  value={state.selectedAgeStage}
+                >
+                  {demoAgeStageOptions.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </label>
+              <div className="age-focus-card" id="age-stage-description">
+                <span className="specimen-label">Learning focus</span>
+                <strong>{selectedAgeOption.focusLabel}</strong>
+                <p>{selectedAgeOption.description}</p>
+              </div>
+            </section>
+
+            {!isKitchenSoundAge ? (
+              <aside className="age-stage-note" role="status">
+                <p className="panel-kicker">This public demo</p>
+                <h2>Choose Ages 3–4 to open the guided sound quest.</h2>
+                <p>
+                  The other age bands set the product direction above. Their
+                  dedicated parent-led activities are not part of this single
+                  hackathon demo, so this screen does not pretend one activity
+                  fits every age.
+                </p>
+              </aside>
+            ) : (
+              <>
 
             <section className="intake-desk" aria-labelledby="intake-title">
               <div>
@@ -1050,8 +1118,23 @@ export function KitchenSoundDemo() {
                           : "Choose the prepared kit or typed materials to create confirmation cards."
                       : typedLiveInventory
                         ? "GPT-5.6 suggested constrained categories from transient object labels. Confirm only what is really present and safe."
-                        : "Only exact matches from the small demo allowlist appear here. Confirm what is present and safe before it enters context."}
+                      : "Only exact matches from the small demo allowlist appear here. Confirm what is present and safe before it enters context."}
                 </p>
+
+                {hasKitchenSoundKit ? (
+                  <aside className="activity-unlocked" aria-label="Unlocked activity">
+                    <span className="specimen-label">Activity unlocked</span>
+                    <h3>Kitchen Sound Detectives</h3>
+                    <p>
+                      Three familiar kitchen materials are ready for a short,
+                      grown-up-led sound investigation.
+                    </p>
+                    <ul className="case-meta" aria-label="Unlocked activity details">
+                      <li>8 minutes</li>
+                      <li>Indoors</li>
+                    </ul>
+                  </aside>
+                ) : null}
 
                 <fieldset disabled={!materialSuggestionsReady}>
                   <legend>Confirm the material kit</legend>
@@ -1245,6 +1328,8 @@ export function KitchenSoundDemo() {
                 </div>
               </section>
             </div>
+              </>
+            )}
           </section>
         ) : null}
 
