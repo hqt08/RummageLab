@@ -41,7 +41,11 @@ import {
 } from "../lib/demo/approved-quest-templates";
 import { findLearningFocus } from "../lib/data/learning-focuses";
 import {
+  LOCAL_OBJECT_PHOTO_DECODE_MAX_BYTES,
+  LOCAL_OBJECT_PHOTO_DECODE_MAX_DIMENSION,
+  LOCAL_OBJECT_PHOTO_DECODE_MAX_PIXELS,
   createLocalPhotoPreview,
+  downscaleLocalObjectPhoto,
   guardTypedObjectLabels,
   normalizeKitchenSoundTypedMaterials,
   photoInventoryToCandidates,
@@ -460,7 +464,13 @@ export function KitchenSoundDemo() {
     }
 
     const validation = validateLocalObjectPhoto(file);
-    if (!validation.ok) {
+    // An over-8MB image is not rejected outright: if it is still within the
+    // on-device decode ceiling it will be downscaled locally after decoding.
+    const oversizedButResizable =
+      !validation.ok &&
+      validation.code === "too_large" &&
+      file.size <= LOCAL_OBJECT_PHOTO_DECODE_MAX_BYTES;
+    if (!validation.ok && !oversizedButResizable) {
       releaseLocalPhotoPreview(photoPreviewUrlRef.current);
       photoPreviewUrlRef.current = null;
       setPhotoPreviewUrl(null);
@@ -521,21 +531,57 @@ export function KitchenSoundDemo() {
       return;
     }
     const dimensionValidation = validateLocalObjectPhotoDimensions(dimensions);
-    if (!dimensionValidation.ok) {
-      releaseLocalPhotoPreview(nextPreviewUrl);
-      photoPreviewUrlRef.current = null;
-      setPhotoError(dimensionValidation.message);
-      input.value = "";
-      setAnnouncement(dimensionValidation.message);
-      return;
+    let finalFile = uploadFile;
+    let finalPreviewUrl = nextPreviewUrl;
+    let resizedLocally = false;
+    if (!dimensionValidation.ok || !validation.ok) {
+      // Modern phone cameras (24/48MP, especially portrait) exceed the demo's
+      // review limits. Downscale entirely on this device — nothing is uploaded
+      // — and let the parent review and confirm the resized photo as usual.
+      const withinDecodeCeiling =
+        dimensions.width <= LOCAL_OBJECT_PHOTO_DECODE_MAX_DIMENSION &&
+        dimensions.height <= LOCAL_OBJECT_PHOTO_DECODE_MAX_DIMENSION &&
+        dimensions.width * dimensions.height <= LOCAL_OBJECT_PHOTO_DECODE_MAX_PIXELS;
+      let resizedFile: File | null = null;
+      if (withinDecodeCeiling) {
+        try {
+          resizedFile = await downscaleLocalObjectPhoto({
+            previewUrl: nextPreviewUrl,
+            width: dimensions.width,
+            height: dimensions.height,
+          });
+        } catch {
+          resizedFile = null;
+        }
+      }
+      if (photoSelectionVersionRef.current !== selectionVersion) {
+        return;
+      }
+      if (!resizedFile) {
+        releaseLocalPhotoPreview(nextPreviewUrl);
+        photoPreviewUrlRef.current = null;
+        const message = dimensionValidation.ok
+          ? "Choose an object photo smaller than 8 MB."
+          : dimensionValidation.message;
+        setPhotoError(message);
+        input.value = "";
+        setAnnouncement(message);
+        return;
+      }
+      finalFile = resizedFile;
+      finalPreviewUrl = createLocalPhotoPreview(resizedFile, nextPreviewUrl);
+      photoPreviewUrlRef.current = finalPreviewUrl;
+      resizedLocally = true;
     }
 
-    setPhotoPreviewUrl(nextPreviewUrl);
-    setPhotoFileName(uploadFile.name);
-    photoFileRef.current = uploadFile;
+    setPhotoPreviewUrl(finalPreviewUrl);
+    setPhotoFileName(finalFile.name);
+    photoFileRef.current = finalFile;
     setPhotoError(null);
     setAnnouncement(
-      "Object photo ready as a local preview. Confirm the object-only boundary before live analysis.",
+      resizedLocally
+        ? "Large photo resized on this device to fit the demo limits; nothing was uploaded. Review and confirm as usual."
+        : "Object photo ready as a local preview. Confirm the object-only boundary before live analysis.",
     );
   }
 

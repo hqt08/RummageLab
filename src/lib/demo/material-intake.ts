@@ -284,6 +284,82 @@ export function readLocalObjectPhotoDimensions(
   });
 }
 
+/**
+ * On-device resize ceiling. Photos beyond the demo's 6000px/16MP review limits
+ * (typical modern-phone 24/48MP captures, especially portrait) are downscaled
+ * locally in the browser instead of being rejected. These decode caps bound
+ * what the resizer will even attempt.
+ */
+export const LOCAL_OBJECT_PHOTO_DECODE_MAX_DIMENSION = 16_000;
+export const LOCAL_OBJECT_PHOTO_DECODE_MAX_PIXELS = 120_000_000;
+export const LOCAL_OBJECT_PHOTO_DECODE_MAX_BYTES = 32 * 1024 * 1024;
+
+/**
+ * Target dimensions that fit the review limits, preserving aspect ratio.
+ * Returns null when the image already fits (no resize needed).
+ */
+export function computeDownscaledDimensions(
+  width: number,
+  height: number,
+): { width: number; height: number } | null {
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+    return null;
+  }
+  const scale = Math.min(
+    1,
+    LOCAL_OBJECT_PHOTO_MAX_DIMENSION / Math.max(width, height),
+    Math.sqrt(LOCAL_OBJECT_PHOTO_MAX_PIXELS / (width * height)),
+  );
+  if (scale >= 1) {
+    return null;
+  }
+  return {
+    width: Math.max(1, Math.floor(width * scale)),
+    height: Math.max(1, Math.floor(height * scale)),
+  };
+}
+
+/**
+ * Downscales an oversized local photo entirely on-device via canvas and
+ * re-encodes it as JPEG (which also drops EXIF/location metadata). Returns
+ * null when no resize is needed or the browser cannot produce a bounded JPEG.
+ * Nothing is uploaded here; the parent still reviews and confirms the result.
+ */
+export async function downscaleLocalObjectPhoto(input: {
+  previewUrl: string;
+  width: number;
+  height: number;
+}): Promise<File | null> {
+  const target = computeDownscaledDimensions(input.width, input.height);
+  if (!target) {
+    return null;
+  }
+
+  const image = new window.Image();
+  await new Promise<void>((resolve, reject) => {
+    image.onload = () => resolve();
+    image.onerror = () => reject(new Error("Image decoding failed."));
+    image.src = input.previewUrl;
+  });
+
+  const canvas = document.createElement("canvas");
+  canvas.width = target.width;
+  canvas.height = target.height;
+  const context = canvas.getContext("2d");
+  if (!context) {
+    return null;
+  }
+  context.drawImage(image, 0, 0, target.width, target.height);
+
+  const blob = await new Promise<Blob | null>((resolve) =>
+    canvas.toBlob(resolve, "image/jpeg", 0.86),
+  );
+  if (!blob || blob.size === 0 || blob.size > LOCAL_OBJECT_PHOTO_MAX_BYTES) {
+    return null;
+  }
+  return new File([blob], "object-photo.jpeg", { type: "image/jpeg" });
+}
+
 export type ObjectUrlApi = {
   createObjectURL(blob: Blob): string;
   revokeObjectURL(url: string): void;

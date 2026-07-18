@@ -3,7 +3,9 @@ import { describe, expect, it, vi } from "vitest";
 import {
   guardTypedObjectLabels,
   LOCAL_OBJECT_PHOTO_MAX_BYTES,
+  LOCAL_OBJECT_PHOTO_MAX_DIMENSION,
   LOCAL_OBJECT_PHOTO_MAX_PIXELS,
+  computeDownscaledDimensions,
   createLocalPhotoPreview,
   normalizeKitchenSoundTypedMaterials,
   releaseLocalPhotoPreview,
@@ -105,6 +107,26 @@ describe("local object-photo intake", () => {
     // An empty or odd MIME type (as iOS galleries send) is not rejected here;
     // the real format is decided from the bytes in content validation.
     expect(validateLocalObjectPhoto({ size: 1_024, type: "" })).toEqual({ ok: true });
+  });
+
+  it("downscales oversized phone captures to fit the review limits, preserving aspect", () => {
+    // A 48MP iPhone portrait capture must scale to within 6000px and 16MP.
+    const portrait = computeDownscaledDimensions(6048, 8064);
+    expect(portrait).not.toBeNull();
+    expect(portrait!.width * portrait!.height).toBeLessThanOrEqual(LOCAL_OBJECT_PHOTO_MAX_PIXELS);
+    expect(Math.max(portrait!.width, portrait!.height)).toBeLessThanOrEqual(LOCAL_OBJECT_PHOTO_MAX_DIMENSION);
+    // Aspect ratio preserved within rounding.
+    expect(portrait!.height / portrait!.width).toBeCloseTo(8064 / 6048, 2);
+
+    // A 24MP landscape capture also fits after scaling.
+    const landscape = computeDownscaledDimensions(6000, 4000);
+    expect(landscape).not.toBeNull();
+    expect(landscape!.width * landscape!.height).toBeLessThanOrEqual(LOCAL_OBJECT_PHOTO_MAX_PIXELS);
+
+    // A standard 12MP capture needs no resize.
+    expect(computeDownscaledDimensions(4032, 3024)).toBeNull();
+    // Degenerate input never produces a bogus target.
+    expect(computeDownscaledDimensions(0, 100)).toBeNull();
   });
 
   it("decides the image type from magic bytes, not the declared MIME type", async () => {
