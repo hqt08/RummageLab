@@ -77,11 +77,19 @@ describe("server-safe runtime request contracts", () => {
     ).toBe(false);
   });
 
-  it("limits automatic fallback to the reviewed Kitchen Sound fixture", () => {
+  it("limits automatic fallback to contexts with exactly one reviewed template", () => {
+    // Every age band now has a reviewed fallback template…
     expect(
       SeededKitchenSoundExperienceRequestSchema.safeParse({
         ...validExperienceRequest,
         activityContext: { ...validContext, ageStage: "4-6y" },
+      }).success,
+    ).toBe(true);
+    // …but a context outside any template's bounds still has none.
+    expect(
+      SeededKitchenSoundExperienceRequestSchema.safeParse({
+        ...validExperienceRequest,
+        activityContext: { ...validContext, ageStage: "4-6y", availableMinutes: 5 },
       }).success,
     ).toBe(false);
     expect(

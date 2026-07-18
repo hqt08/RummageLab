@@ -39,11 +39,9 @@ export const seededRuntimeProvider: ExperienceRuntimeProvider = {
   },
   async selectExperience(request) {
     const parsedRequest = ExperienceRequestSchema.parse(request);
-    if (parsedRequest.activityContext.ageStage !== "3-4y") {
-      throw new RuntimeProviderFailure("provider_unavailable");
-    }
-
-    return kitchenSoundQuest;
+    // Deterministic reviewed experience for every age band; for the exact
+    // 3–4 kitchen kit this is byte-identical to the seeded Kitchen Sound quest.
+    return deterministicApprovedQuestForContext(parsedRequest.activityContext);
   },
 };
 

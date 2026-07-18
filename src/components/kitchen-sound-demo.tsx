@@ -40,6 +40,7 @@ import {
   deterministicApprovedQuestForContext,
 } from "../lib/demo/approved-quest-templates";
 import { findLearningFocus } from "../lib/data/learning-focuses";
+import { isUnderThreeCategory } from "../lib/demo/age-band-fallbacks";
 import {
   LOCAL_OBJECT_PHOTO_DECODE_MAX_BYTES,
   LOCAL_OBJECT_PHOTO_DECODE_MAX_DIMENSION,
@@ -58,7 +59,7 @@ import {
   type MaterialIntakeSource,
   type VettedCandidate,
 } from "../lib/demo/material-intake";
-import type { AllowedMaterialCategory, PhotoInventory, QuestSpec } from "../lib/schemas";
+import type { AllowedMaterialCategory, ExperienceSpec, PhotoInventory } from "../lib/schemas";
 import {
   ExperienceResponseSchema,
   LiveExperienceCapabilitySchema,
@@ -216,7 +217,7 @@ export function KitchenSoundDemo() {
   const [typedInventoryStatus, setTypedInventoryStatus] = useState<RuntimePreviewStatus>("idle");
   const [typedInventoryMessage, setTypedInventoryMessage] = useState<string | null>(null);
   const [livePhotoAnalysisAvailable, setLivePhotoAnalysisAvailable] = useState(false);
-  const [activeQuest, setActiveQuest] = useState<QuestSpec>(kitchenSoundQuest);
+  const [activeQuest, setActiveQuest] = useState<ExperienceSpec>(kitchenSoundQuest);
   const [objectOnlyConsent, setObjectOnlyConsent] = useState(false);
   const [liveSource, setLiveSource] = useState<"live_provider" | "seeded_fallback" | null>(null);
   const [typedReflection, setTypedReflection] = useState("");
@@ -418,7 +419,7 @@ export function KitchenSoundDemo() {
           "content-type": "application/json",
           "x-rummagelab-operation": "typed_object_inventory",
         },
-        body: JSON.stringify({ operation: "typed_object_inventory", objectLabels: guarded.objectLabels }),
+        body: JSON.stringify({ operation: "typed_object_inventory", objectLabels: guarded.objectLabels, ageStage: state.selectedAgeStage }),
       });
       const payload = PhotoInventoryResponseSchema.parse(await response.json());
       if (runtimeRequestVersionRef.current !== requestVersion) return;
@@ -602,7 +603,7 @@ export function KitchenSoundDemo() {
     const body = new FormData();
     body.set("operation", "photo_inventory");
     body.set("objectOnlyConfirmed", "true");
-    body.set("ageStage", "3-4y");
+    body.set("ageStage", state.selectedAgeStage);
     body.set("photo", file);
     try {
       const response = await fetch("/api/live-experience", { method: "POST", body });
@@ -801,7 +802,8 @@ export function KitchenSoundDemo() {
   }
 
   const selectedAgeOption = findDemoAgeStageOption(state.selectedAgeStage);
-  const isKitchenSoundAge = state.selectedAgeStage === "3-4y";
+  const underThreeSelected =
+    state.selectedAgeStage === "0-12m" || state.selectedAgeStage === "12-36m";
   const confirmedCategories = state.confirmedObjects.map((object) => object.category);
   const hasKitchenSoundKit =
     confirmedCategories.length === KITCHEN_SOUND_REQUIRED_MATERIALS.length &&
@@ -810,7 +812,10 @@ export function KitchenSoundDemo() {
     );
   const canStart = canStartKitchenSoundQuest(state);
   const gateParts = [
-    !isKitchenSoundAge ? "Ages 3–4 for this guided activity" : null,
+    underThreeSelected &&
+    state.confirmedObjects.some((object) => !isUnderThreeCategory(object.category))
+      ? "only under-three-approved items for this band"
+      : null,
     state.materialSource === "photo" && !photoPreviewUrl
       ? "an object-only photo"
       : null,
@@ -952,18 +957,19 @@ export function KitchenSoundDemo() {
               </div>
             </section>
 
-            {!isKitchenSoundAge ? (
+            {underThreeSelected ? (
               <aside className="age-stage-note" role="status">
-                <p className="panel-kicker">This public demo</p>
-                <h2>Choose Ages 3–4 to open the guided activity.</h2>
+                <p className="panel-kicker">Under-three boundary</p>
+                <h2>Only large, soft, mouth-safe items can enter this band.</h2>
                 <p>
-                  The other age bands set the product direction above. Their
-                  dedicated parent-led activities are not part of this single
-                  hackathon demo, so this screen does not pretend one activity
-                  fits every age.
+                  For ages 0–2, activities are caregiver-led and screen-free for
+                  the child, and only the smaller under-three material allowlist
+                  (large containers, soft cloth, board books, large soft balls)
+                  can be confirmed.
                 </p>
               </aside>
-            ) : (
+            ) : null}
+            {(
               <>
 
             <section className="intake-desk" aria-labelledby="intake-title">
@@ -1227,11 +1233,14 @@ export function KitchenSoundDemo() {
                       const checked = state.confirmedObjects.some(
                         (object) => object.id === item.id,
                       );
+                      const blockedForUnderThree =
+                        underThreeSelected && !isUnderThreeCategory(item.category);
 
                       return (
                         <label className="check-row" key={item.id}>
                           <input
                             checked={checked}
+                            disabled={blockedForUnderThree}
                             onChange={() =>
                               dispatch({ type: "TOGGLE_OBJECT", id: item.id })
                             }
@@ -1242,6 +1251,12 @@ export function KitchenSoundDemo() {
                             <span className="check-detail">
                               {materialDetails[item.category]}
                             </span>
+                            {blockedForUnderThree ? (
+                              <span className="check-warning" role="note">
+                                <strong>Not for under-three:</strong>{" "}
+                                Only large containers, soft cloth, board books, and large soft balls can be confirmed for this band.
+                              </span>
+                            ) : null}
                             {item.warnings.length > 0 ? (
                               <span className="check-warning" role="note">
                                 <strong>
@@ -1426,7 +1441,9 @@ export function KitchenSoundDemo() {
         {state.phase === "quest" ? (
           <section className="stage" data-phase="quest">
             <StageHeader
-              deck="The real objects lead the play. This approved screen only guides prediction, noticing, and turns."
+              deck={activeQuest.experienceMode === "guided_quest"
+                ? "The real objects lead the play. This approved screen only guides prediction, noticing, and turns."
+                : "This is a caregiver-led, screen-free moment. The script below is for the grown-up; the real objects lead the play."}
               eyebrow={phaseProgress[state.phase]}
               headingRef={stageHeadingRef}
               title={activeQuest.title}
@@ -1434,11 +1451,14 @@ export function KitchenSoundDemo() {
 
             <div className={`activity-origin activity-origin--${activityOrigin}`} role="note">
               <span className="activity-origin-badge">{activityOriginLabel}</span>
-              {activeQuest.activitySummary ? (
-                <p className="activity-summary">{activeQuest.activitySummary}</p>
-              ) : null}
+              <p className="activity-summary">
+                {activeQuest.experienceMode === "guided_quest"
+                  ? activeQuest.activitySummary ?? activeQuest.parentFacingGoal
+                  : activeQuest.parentFacingGoal}
+              </p>
             </div>
 
+            {activeQuest.experienceMode === "guided_quest" ? (
             <div className="quest-layout">
               <div>
                 <article className="notebook-card">
@@ -1508,6 +1528,67 @@ export function KitchenSoundDemo() {
                 </div>
               </div>
             </div>
+            ) : (
+            <div className="quest-layout">
+              <div>
+                <article className="notebook-card">
+                  <p className="panel-kicker">
+                    Caregiver-led moment · no child screen use
+                  </p>
+                  <h2 className="panel-title">The grown-up script</h2>
+                  <p className="parent-cue">
+                    Read each line, go slowly, and follow your child&apos;s cues.
+                    There is nothing to score and nothing for the child on screen.
+                  </p>
+
+                  <ol className="quest-steps">
+                    {activeQuest.adultScript.map((line, index) => (
+                      <li className="quest-step" key={`${index}-${line}`}>
+                        <div>
+                          <span className="step-minute">Step {index + 1}</span>
+                          <p className="step-copy">{line}</p>
+                        </div>
+                      </li>
+                    ))}
+                  </ol>
+
+                  <div className="focus-strip" aria-label="Developmental focus">
+                    {learningFocuses.map((focus) => (
+                      <span className="focus-chip" key={focus.id}>
+                        {focus.title}
+                      </span>
+                    ))}
+                  </div>
+
+                  <p className="safety-callout">
+                    <strong>Keep away:</strong>{" "}
+                    {activeQuest.forbiddenMaterialCategories.join("; ")}.
+                  </p>
+                  <p className="safety-callout">
+                    <strong>Stop if:</strong>{" "}
+                    {activeQuest.stopIf.join(" ")}
+                  </p>
+                </article>
+              </div>
+
+              <div>
+                <article className="notebook-card">
+                  <p className="panel-kicker">Afterwards</p>
+                  <h2 className="panel-title">One thing to notice</h2>
+                  <p className="parent-cue">{activeQuest.parentObservationPrompt}</p>
+                </article>
+                <div className="button-row">
+                  <button
+                    className="primary-button"
+                    onClick={() => transitionDemo({ type: "FINISH_QUEST" })}
+                    type="button"
+                  >
+                    We finished this moment
+                  </button>
+                </div>
+              </div>
+            </div>
+            )}
           </section>
         ) : null}
 

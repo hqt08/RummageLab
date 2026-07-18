@@ -1,6 +1,12 @@
 import { z } from "zod";
 
-import { ActivityContextSchema, QuestSpecSchema, type ActivityContext, type AllowedMaterialCategory, type QuestSpec } from "../schemas";
+import { ActivityContextSchema, QuestSpecSchema, type ActivityContext, type AllowedMaterialCategory, type ExperienceSpec, type QuestSpec } from "../schemas";
+import {
+  createInfantNoticingMoment,
+  createKindergartenNoticingQuest,
+  createToddlerCoPlayMoment,
+  isUnderThreeCategory,
+} from "./age-band-fallbacks";
 import {
   BALL_PREDICT_TEMPLATE_ID,
   ballPredictQuest,
@@ -20,6 +26,9 @@ export const ApprovedQuestTemplateIdSchema = z.enum([
   "kitchen-sound-detectives",
   BALL_PREDICT_TEMPLATE_ID,
   "everyday-object-noticing",
+  "infant-noticing-moment",
+  "toddler-co-play-moment",
+  "kindergarten-investigation",
 ]);
 export type ApprovedQuestTemplateId = z.infer<typeof ApprovedQuestTemplateIdSchema>;
 
@@ -67,11 +76,23 @@ export function createApprovedActivityContext(input: {
 
 export function availableApprovedQuestTemplateIds(context: ActivityContext): ApprovedQuestTemplateId[] {
   const materials = context.confirmedMaterials.map((item) => item.allowedMaterialCategory);
-  if (context.ageStage === "3-4y" && hasExactKitchenSoundKit(materials)) {
+  if (!context.parentConfirmedSafety) return [];
+  // Under-three bands render caregiver-led moments from the smaller allowlist
+  // (the context parse already rejects non-under-three materials for them).
+  if (context.ageStage === "0-12m") {
+    return materials.every(isUnderThreeCategory) ? ["infant-noticing-moment"] : [];
+  }
+  if (context.ageStage === "12-36m") {
+    return materials.every(isUnderThreeCategory) ? ["toddler-co-play-moment"] : [];
+  }
+  if (context.ageStage === "4-6y") {
+    return context.availableMinutes >= 8 ? ["kindergarten-investigation"] : [];
+  }
+  if (hasExactKitchenSoundKit(materials)) {
     return ["kitchen-sound-detectives"];
   }
   if (canUseBallPredictTemplate(context)) return [BALL_PREDICT_TEMPLATE_ID];
-  return context.ageStage === "3-4y" && context.setting === "indoors" && context.availableMinutes >= 8 && context.parentConfirmedSafety
+  return context.setting === "indoors" && context.availableMinutes >= 8
     ? ["everyday-object-noticing"]
     : [];
 }
@@ -132,21 +153,29 @@ export function canStartApprovedQuest(input: {
   parentApprovedWeather: boolean;
   parentConfirmedSafety: boolean;
   materialSource?: MaterialIntakeSource;
+  ageStage?: ActivityContext["ageStage"];
 }): boolean {
   if (!input.parentApprovedWeather || input.approvedWeatherTags.length < 1 || input.approvedWeatherTags.length > 4 || !input.parentConfirmedSafety) return false;
   if (input.confirmedObjects.length === 0 || input.candidateIds.length === 0) return false;
   const ids = input.confirmedObjects.map((object) => object.id);
   if (new Set(ids).size !== ids.length) return false;
   if (!ids.every((id) => input.candidateIds.includes(id))) return false;
-  const context = createApprovedActivityContext({
-    materialSource: input.materialSource ?? "typed",
-    confirmedMaterials: input.confirmedObjects.map((object) => ({
-      allowedMaterialCategory: object.category,
-      label: object.label,
-    })),
-    approvedWeatherTags: input.approvedWeatherTags,
-    parentConfirmedSafety: input.parentConfirmedSafety,
-  });
+  let context: ActivityContext;
+  try {
+    context = createApprovedActivityContext({
+      ageStage: input.ageStage,
+      materialSource: input.materialSource ?? "typed",
+      confirmedMaterials: input.confirmedObjects.map((object) => ({
+        allowedMaterialCategory: object.category,
+        label: object.label,
+      })),
+      approvedWeatherTags: input.approvedWeatherTags,
+      parentConfirmedSafety: input.parentConfirmedSafety,
+    });
+  } catch {
+    // e.g. a material category that is not approved for an under-three band.
+    return false;
+  }
   // A reviewed fallback template must exist for this context so a failed live
   // generation is always recoverable; the live path still authors a fresh one.
   return availableApprovedQuestTemplateIds(context).length === 1;
@@ -155,17 +184,20 @@ export function canStartApprovedQuest(input: {
 export function resolveApprovedQuestTemplate(
   selection: unknown,
   context: ActivityContext,
-): QuestSpec {
+): ExperienceSpec {
   const { templateId } = ApprovedQuestTemplateSelectionSchema.parse(selection);
   if (!availableApprovedQuestTemplateIds(context).includes(templateId)) {
     throw new Error("The selected reviewed template does not match the parent-approved context");
   }
   if (templateId === "kitchen-sound-detectives") return parseKitchenSoundQuest(kitchenSoundQuest, context);
   if (templateId === BALL_PREDICT_TEMPLATE_ID) return parseBallPredictQuest(ballPredictQuest, context);
+  if (templateId === "infant-noticing-moment") return createInfantNoticingMoment(context);
+  if (templateId === "toddler-co-play-moment") return createToddlerCoPlayMoment(context);
+  if (templateId === "kindergarten-investigation") return createKindergartenNoticingQuest(context);
   return createEverydayObjectNoticingQuest(context);
 }
 
-export function deterministicApprovedQuestForContext(context: ActivityContext): QuestSpec {
+export function deterministicApprovedQuestForContext(context: ActivityContext): ExperienceSpec {
   const [templateId] = availableApprovedQuestTemplateIds(context);
   if (!templateId) throw new Error("No reviewed activity template matches this parent-approved context");
   return resolveApprovedQuestTemplate({ templateId }, context);

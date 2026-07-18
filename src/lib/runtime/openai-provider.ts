@@ -8,11 +8,25 @@ import {
   deterministicApprovedQuestForContext,
 } from "../demo/approved-quest-templates";
 import { learningFocusCatalog } from "../data/learning-focuses";
-import { AllowedMaterialCategorySchema, PhotoInventorySchema, QuestSpecSchema } from "../schemas";
+import {
+  AllowedMaterialCategorySchema,
+  PhotoInventorySchema,
+  QuestSpecSchema,
+  RummageMomentSpecSchema,
+  UnderThreeMaterialCategorySchema,
+} from "../schemas";
 import { RuntimeProviderFailure } from "./seeded-runtime";
 
 /** Single source of truth for the model-facing category enum (no hand copy). */
 const ALLOWED_MATERIAL_CATEGORY_ENUM = [...AllowedMaterialCategorySchema.options];
+/** Smaller category enum for under-three bands, derived from the Zod source. */
+const UNDER_THREE_CATEGORY_ENUM = [...UnderThreeMaterialCategorySchema.options];
+
+function categoryEnumForAge(ageStage: string): readonly string[] {
+  return ageStage === "0-12m" || ageStage === "12-36m"
+    ? UNDER_THREE_CATEGORY_ENUM
+    : ALLOWED_MATERIAL_CATEGORY_ENUM;
+}
 /** Only human-curated developmental focus IDs may be authored by the model. */
 const DEVELOPMENTAL_FOCUS_ID_ENUM = learningFocusCatalog.map((focus) => focus.id);
 /** Authoring a full activity reasons longer than a simple object inventory. */
@@ -85,6 +99,28 @@ export const PHOTO_INVENTORY_JSON_SCHEMA = {
   },
 } as const;
 
+/** Per-age inventory schema: under-three bands vet against the smaller enum. */
+function photoInventoryJsonSchemaForAge(ageStage: string): object {
+  const enumForAge = categoryEnumForAge(ageStage);
+  if (enumForAge === ALLOWED_MATERIAL_CATEGORY_ENUM) return PHOTO_INVENTORY_JSON_SCHEMA;
+  return {
+    ...PHOTO_INVENTORY_JSON_SCHEMA,
+    properties: {
+      ...PHOTO_INVENTORY_JSON_SCHEMA.properties,
+      suggestedItems: {
+        ...PHOTO_INVENTORY_JSON_SCHEMA.properties.suggestedItems,
+        items: {
+          ...PHOTO_INVENTORY_JSON_SCHEMA.properties.suggestedItems.items,
+          properties: {
+            ...PHOTO_INVENTORY_JSON_SCHEMA.properties.suggestedItems.items.properties,
+            allowedMaterialCategory: { type: "string", enum: enumForAge },
+          },
+        },
+      },
+    },
+  };
+}
+
 const TOOL_BASE_PROPS = {
   title: { type: "string", minLength: 1, maxLength: 80 },
   prompt: { type: "string", minLength: 1, maxLength: 240 },
@@ -151,10 +187,11 @@ const TOOL_JSON_SCHEMA = {
 } as const;
 
 /**
- * Mirrors the 3–4y branch of QuestSpecSchema. The model authors the full
+ * Mirrors the quest branch of QuestSpecSchema. The model authors the full
  * activity, but every field is bounded, the tool is one of five approved
  * renderers, materials/focus IDs are enum-constrained, and the result is
  * re-validated against the parent-approved context server-side before render.
+ * The ageStage enum is swapped per request (3-4y or 4-6y).
  */
 const QUEST_GENERATION_JSON_SCHEMA = {
   type: "object",
@@ -217,6 +254,81 @@ const QUEST_GENERATION_JSON_SCHEMA = {
     fallbackMessage: { type: "string", minLength: 1, maxLength: 240 },
   },
 } as const;
+
+function questGenerationJsonSchemaForAge(ageStage: "3-4y" | "4-6y"): object {
+  return {
+    ...QUEST_GENERATION_JSON_SCHEMA,
+    properties: {
+      ...QUEST_GENERATION_JSON_SCHEMA.properties,
+      ageStage: { type: "string", enum: [ageStage] },
+    },
+  };
+}
+
+/**
+ * Mirrors RummageMomentSpecSchema for the under-three bands: a caregiver-led,
+ * screen-free moment with no child tool, bounded text, the smaller material
+ * enum, and the band's fixed experience mode. Re-validated server-side.
+ */
+function momentGenerationJsonSchemaForAge(ageStage: "0-12m" | "12-36m"): object {
+  return {
+    type: "object",
+    additionalProperties: false,
+    required: [
+      "id",
+      "title",
+      "ageStage",
+      "experienceMode",
+      "developmentalFocusIds",
+      "parentFacingGoal",
+      "adultSupervision",
+      "approvedMaterialCategories",
+      "forbiddenMaterialCategories",
+      "adultScript",
+      "stopIf",
+      "parentObservationPrompt",
+      "fallbackMessage",
+    ],
+    properties: {
+      id: { type: "string", minLength: 1, maxLength: 80 },
+      title: { type: "string", minLength: 1, maxLength: 100 },
+      ageStage: { type: "string", enum: [ageStage] },
+      experienceMode: {
+        type: "string",
+        enum: [ageStage === "0-12m" ? "caregiver_moment" : "co_play"],
+      },
+      developmentalFocusIds: {
+        type: "array",
+        minItems: 1,
+        maxItems: 3,
+        items: { type: "string", enum: DEVELOPMENTAL_FOCUS_ID_ENUM },
+      },
+      parentFacingGoal: { type: "string", minLength: 1, maxLength: 240 },
+      adultSupervision: { type: "boolean", const: true },
+      approvedMaterialCategories: {
+        type: "array",
+        minItems: 1,
+        maxItems: 5,
+        items: { type: "string", enum: UNDER_THREE_CATEGORY_ENUM },
+      },
+      forbiddenMaterialCategories: {
+        type: "array",
+        minItems: 1,
+        maxItems: 6,
+        items: { type: "string", minLength: 1, maxLength: 100 },
+      },
+      adultScript: {
+        type: "array",
+        minItems: 2,
+        maxItems: 5,
+        items: { type: "string", minLength: 1, maxLength: 280 },
+      },
+      stopIf: { type: "array", minItems: 1, maxItems: 4, items: { type: "string", minLength: 1, maxLength: 160 } },
+      parentObservationPrompt: { type: "string", minLength: 1, maxLength: 240 },
+      fallbackMessage: { type: "string", minLength: 1, maxLength: 240 },
+    },
+  };
+}
 
 type ResponsesBody = { output?: Array<{ type?: string; content?: Array<{ type?: string; text?: string }> }> };
 
@@ -312,16 +424,21 @@ export function createOpenAIExperienceProvider(
   return {
     async getPhotoInventory(request) {
       const parsed = PhotoInventoryRequestSchema.parse(request);
-      if (parsed.ageStage !== "3-4y") {
-        throw new RuntimeProviderFailure("provider_context_mismatch");
-      }
+      const underThree = parsed.ageStage === "0-12m" || parsed.ageStage === "12-36m";
+      const inventorySchema = photoInventoryJsonSchemaForAge(parsed.ageStage);
+      const categoryGuidance = underThree
+        ? `map each object only to these large, under-three-approved categories ${JSON.stringify(UNDER_THREE_CATEGORY_ENUM)} and simply omit objects that do not fit them (small, hard, sharp, or mouth-size items must not appear)`
+        : 'give a coarse category (use "other_safe_object" if none fits)';
+      const ageNote = underThree
+        ? ` The child is under three (${parsed.ageStage}): be conservative, and flag mouthing or size concerns in warnings.`
+        : "";
       if (parsed.mode === "live_typed_object_labels") {
         const result = PhotoInventorySchema.parse(await requestStructured(
           "typed_object_inventory",
-          PHOTO_INVENTORY_JSON_SCHEMA,
+          inventorySchema,
           [{
             type: "input_text",
-            text: `Interpret these transient, parent-entered everyday-object labels. For each distinct object give a short label, a coarse category (use "other_safe_object" if none fits), a safetyLevel of "ok" or "caution", and up to three short parent cautions in warnings (empty if none). Do not repeat objects, infer identity, or make the final safety decision — a parent confirms every suggestion. Labels: ${JSON.stringify(parsed.objectLabels)}`,
+            text: `Interpret these transient, parent-entered everyday-object labels. For each distinct object give a short label, ${categoryGuidance}, a safetyLevel of "ok" or "caution", and up to three short parent cautions in warnings (empty if none). Do not repeat objects, infer identity, or make the final safety decision — a parent confirms every suggestion.${ageNote} Labels: ${JSON.stringify(parsed.objectLabels)}`,
           }],
         ));
         if (result.imageMode !== "live" || !hasUniqueSuggestedLabels(result.suggestedItems)) {
@@ -334,9 +451,9 @@ export function createOpenAIExperienceProvider(
       }
       const result = PhotoInventorySchema.parse(await requestStructured(
         "photo_inventory",
-        PHOTO_INVENTORY_JSON_SCHEMA,
+        inventorySchema,
         [
-          { type: "input_text", text: "Identify clearly visible household objects a parent might use for supervised toddler play. For each object give a short label, a coarse category (use \"other_safe_object\" if none fits), a safetyLevel of \"ok\" or \"caution\", and up to three short parent cautions in warnings (empty if none). Do not identify people or make the final safety decision — a parent confirms every suggestion." },
+          { type: "input_text", text: `Identify clearly visible household objects a parent might use for supervised play. For each object give a short label, ${categoryGuidance}, a safetyLevel of "ok" or "caution", and up to three short parent cautions in warnings (empty if none). Do not identify people or make the final safety decision — a parent confirms every suggestion.${ageNote}` },
           { type: "input_image", image_url: `data:${options.transientImage.mimeType};base64,${options.transientImage.base64}`, detail: "low" },
         ],
       ));
@@ -365,12 +482,32 @@ export function createOpenAIExperienceProvider(
       }));
       const confirmedCategories = [...new Set(confirmed.map((item) => item.category))];
       const weatherTags = context.weather?.approvedTags ?? [];
+      const objectLabels = JSON.stringify(confirmed.map((item) => item.label));
+
+      // Under-three bands: author a caregiver-led, screen-free RummageMoment
+      // (no child tool) instead of a quest.
+      if (context.ageStage === "0-12m" || context.ageStage === "12-36m") {
+        const mode = context.ageStage === "0-12m" ? "caregiver_moment" : "co_play";
+        const raw = await requestStructured(
+          "generated_moment",
+          momentGenerationJsonSchemaForAge(context.ageStage),
+          [{
+            type: "input_text",
+            text: `Author one short, gentle, caregiver-led moment for a ${context.ageStage} child using these parent-confirmed large everyday objects. This is screen-free for the child: the adultScript (2-5 short lines) tells the grown-up what to do and say, referring to the objects by their labels. Rules: ageStage "${context.ageStage}"; experienceMode "${mode}"; developmentalFocusIds only from ${JSON.stringify(DEVELOPMENTAL_FOCUS_ID_ENUM)} (1-3); approvedMaterialCategories only from ${JSON.stringify(confirmedCategories)}; list real hazards to keep away in forbiddenMaterialCategories; calm, supervised, no mouthing risks, appropriate for the weather tags ${JSON.stringify(weatherTags)} and an ${context.setting} setting. No URLs, code, brand names, or real names. Confirmed objects: ${objectLabels}. Context: ${JSON.stringify(context)}`,
+          }],
+          GENERATION_TIMEOUT_MS,
+        );
+        // Structural parse here; resolveExperience re-validates against the
+        // parent-approved context (materials subset, focus catalogue).
+        return RummageMomentSpecSchema.parse(raw);
+      }
+
       const raw = await requestStructured(
         "generated_activity",
-        QUEST_GENERATION_JSON_SCHEMA,
+        questGenerationJsonSchemaForAge(context.ageStage),
         [{
           type: "input_text",
-          text: `Author one short, safe, grown-up-led activity for a ${context.ageStage} child, tailored to these parent-confirmed everyday objects and context. Refer to the objects by their labels in the steps. Rules: experienceMode "guided_quest"; ageStage "${context.ageStage}"; 2-6 steps, each minute within 0..${context.availableMinutes}; choose developmentalFocusIds only from ${JSON.stringify(DEVELOPMENTAL_FOCUS_ID_ENUM)}; use materials only from ${JSON.stringify(confirmedCategories)}; choose exactly one tool from sort, measure, predict, sound_mix, or field_journal; keep it ${context.setting}, calm, non-recording, and appropriate for the weather tags ${JSON.stringify(weatherTags)}. activitySummary is one short parent-facing sentence describing the activity. No URLs, code, brand names, or real names. Confirmed objects: ${JSON.stringify(confirmed.map((item) => item.label))}. Context: ${JSON.stringify(context)}`,
+          text: `Author one short, safe, grown-up-led activity for a ${context.ageStage} child, tailored to these parent-confirmed everyday objects and context. Refer to the objects by their labels in the steps. Rules: experienceMode "guided_quest"; ageStage "${context.ageStage}"; 2-6 steps, each minute within 0..${context.availableMinutes}; choose developmentalFocusIds only from ${JSON.stringify(DEVELOPMENTAL_FOCUS_ID_ENUM)}; use materials only from ${JSON.stringify(confirmedCategories)}; choose exactly one tool from sort, measure, predict, sound_mix, or field_journal; keep it ${context.setting}, calm, non-recording, and appropriate for the weather tags ${JSON.stringify(weatherTags)}${context.ageStage === "4-6y" ? "; pitch the challenge for a 5-6 year old: predicting, testing, comparing, and explaining" : ""}. activitySummary is one short parent-facing sentence describing the activity. No URLs, code, brand names, or real names. Confirmed objects: ${objectLabels}. Context: ${JSON.stringify(context)}`,
         }],
         GENERATION_TIMEOUT_MS,
       );

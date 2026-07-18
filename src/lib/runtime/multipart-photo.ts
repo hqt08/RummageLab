@@ -18,10 +18,19 @@ export class MultipartPhotoError extends Error {
   }
 }
 
+export type TransientPhotoAgeStage = "0-12m" | "12-36m" | "3-4y" | "4-6y";
+
+const TRANSIENT_PHOTO_AGE_STAGES: readonly TransientPhotoAgeStage[] = [
+  "0-12m",
+  "12-36m",
+  "3-4y",
+  "4-6y",
+];
+
 export type TransientPhotoMultipart = {
   operation: "photo_inventory";
   objectOnlyConfirmed: true;
-  ageStage: "3-4y";
+  ageStage: TransientPhotoAgeStage;
   photo: {
     bytes: Uint8Array;
     declaredType: string;
@@ -125,10 +134,12 @@ export async function parseTransientPhotoMultipart(
   }
 
   if (failure) throw new MultipartPhotoError(failure);
+  const ageStage = fields.get("ageStage") as TransientPhotoAgeStage | undefined;
   if (
     fields.get("operation") !== "photo_inventory" ||
     fields.get("objectOnlyConfirmed") !== "true" ||
-    fields.get("ageStage") !== "3-4y" ||
+    !ageStage ||
+    !TRANSIENT_PHOTO_AGE_STAGES.includes(ageStage) ||
     !photoSeen ||
     !photoType
   ) {
@@ -138,7 +149,7 @@ export async function parseTransientPhotoMultipart(
   return {
     operation: "photo_inventory",
     objectOnlyConfirmed: true,
-    ageStage: "3-4y",
+    ageStage,
     photo: {
       bytes: new Uint8Array(Buffer.concat(photoChunks)),
       declaredType: photoType,

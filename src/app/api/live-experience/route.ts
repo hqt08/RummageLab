@@ -21,7 +21,7 @@ import { getLiveOpenAICapability } from "../../../lib/runtime/live-openai-server
 import {
   kitchenSoundActivityContext,
 } from "../../../lib/demo/kitchen-sound-detectives";
-import { ActivityContextSchema } from "../../../lib/schemas";
+import { ActivityContextSchema, AgeStageSchema } from "../../../lib/schemas";
 import { guardTypedObjectLabels } from "../../../lib/demo/material-intake";
 
 export const runtime = "nodejs";
@@ -39,6 +39,8 @@ const ExperienceBodySchema = z.object({
 const TypedObjectInventoryBodySchema = z.object({
   operation: z.literal("typed_object_inventory"),
   objectLabels: z.array(z.string().min(1).max(80)).min(1).max(5),
+  /** Optional for backward compatibility; defaults to the 3–4 demo band. */
+  ageStage: AgeStageSchema.optional(),
 }).strict();
 
 const JsonBodySchema = z.union([ExperienceBodySchema, TypedObjectInventoryBodySchema]);
@@ -153,7 +155,7 @@ export async function POST(request: Request) {
       });
       const inventory = validateLivePhotoInventory(await provider.getPhotoInventory({
         mode: "live_transient_object_upload",
-        ageStage: "3-4y",
+        ageStage: upload.ageStage,
         objectOnly: true,
       }));
       return NextResponse.json(PhotoInventoryResponseSchema.parse({
@@ -182,7 +184,7 @@ export async function POST(request: Request) {
         });
         const inventory = validateLivePhotoInventory(await provider.getPhotoInventory({
           mode: "live_typed_object_labels",
-          ageStage: "3-4y",
+          ageStage: body.ageStage ?? "3-4y",
           objectLabels: guarded.objectLabels,
         }));
         return NextResponse.json(PhotoInventoryResponseSchema.parse({
