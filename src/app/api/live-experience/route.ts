@@ -13,7 +13,6 @@ import {
 } from "../../../lib/runtime/contracts";
 import {
   disabledExperienceResponse,
-  disabledPhotoInventoryResponse,
   resolveExperience,
   runtimeDiagnostic,
   validateLivePhotoInventory,
@@ -21,7 +20,6 @@ import {
 import { getLiveOpenAICapability } from "../../../lib/runtime/live-openai-server";
 import {
   kitchenSoundActivityContext,
-  kitchenSoundPhotoInventory,
 } from "../../../lib/demo/kitchen-sound-detectives";
 import { ActivityContextSchema } from "../../../lib/schemas";
 import { guardTypedObjectLabels } from "../../../lib/demo/material-intake";
@@ -98,11 +96,11 @@ export async function POST(request: Request) {
   // closed, schema-validated fallback for direct callers.
   if (!capability.enabled) {
     if (/^multipart\/form-data(?:;|$)/i.test(contentType)) {
-      return NextResponse.json(PhotoInventoryResponseSchema.parse(disabledPhotoInventoryResponse()));
+      return invalidRequest("live_photo_inventory_unavailable", 503);
     }
     if (/^application\/json(?:;|$)/i.test(contentType)) {
       if (request.headers.get("x-rummagelab-operation") === "typed_object_inventory") {
-        return NextResponse.json(PhotoInventoryResponseSchema.parse(disabledPhotoInventoryResponse()));
+        return invalidRequest("live_typed_mapping_unavailable", 503);
       }
       return NextResponse.json(ExperienceResponseSchema.parse(disabledExperienceResponse({
         fixtureId: "kitchen-sound-detectives",
@@ -159,13 +157,8 @@ export async function POST(request: Request) {
       }));
     } catch (error) {
       if (error instanceof ImageSanitizationError) return invalidRequest(error.code);
-      return NextResponse.json(PhotoInventoryResponseSchema.parse({
-        inventory: kitchenSoundPhotoInventory,
-        runtime: {
-          source: "seeded_fallback",
-          diagnostic: runtimeDiagnostic("photo_inventory", error),
-        },
-      }));
+      runtimeDiagnostic("photo_inventory", error);
+      return invalidRequest("live_photo_inventory_unavailable", 503);
     }
   }
 

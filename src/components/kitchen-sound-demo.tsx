@@ -534,12 +534,16 @@ export function KitchenSoundDemo() {
     const file = photoFileRef.current;
     if (!file || !canSendPhotoForLiveAnalysis(livePhotoAnalysisAvailable, file, objectOnlyConsent)) {
       setLiveInventory(null);
+      setLiveSource(null);
       dispatch({ type: "SET_MATERIAL_CANDIDATES", materials: [] });
       return;
     }
     const requestVersion = ++runtimeRequestVersionRef.current;
     setRuntimePreviewStatus("loading");
     setPhotoError(null);
+    setLiveInventory(null);
+    setLiveSource(null);
+    dispatch({ type: "SET_MATERIAL_CANDIDATES", materials: [] });
     const body = new FormData();
     body.set("operation", "photo_inventory");
     body.set("objectOnlyConfirmed", "true");
@@ -566,6 +570,9 @@ export function KitchenSoundDemo() {
     } catch {
       if (runtimeRequestVersionRef.current !== requestVersion) return;
       setRuntimePreviewStatus("error");
+      setLiveInventory(null);
+      setLiveSource(null);
+      dispatch({ type: "SET_MATERIAL_CANDIDATES", materials: [] });
       setPhotoError("Live analysis could not prepare a safe inventory. Retry or use the prepared kit.");
     }
   }

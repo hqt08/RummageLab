@@ -39,8 +39,9 @@ describe("live experience API route", () => {
     form.set("photo", new Blob([await objectPhoto()], { type: "image/jpeg" }), "private-name.jpg");
     const response = await POST(new Request("http://local/api/live-experience", { method: "POST", body: form }));
     const body = await response.json();
-    expect(body.runtime.source).toBe("seeded_fallback");
-    expect(body).not.toContain("private-name");
+    expect(response.status).toBe(503);
+    expect(body).toEqual({ error: { code: "live_photo_inventory_unavailable" } });
+    expect(JSON.stringify(body)).not.toContain("private-name");
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
@@ -57,7 +58,8 @@ describe("live experience API route", () => {
       },
     } as unknown as Request);
     const photo = await photoResponse.json();
-    expect(photo.runtime.diagnostic.code).toBe("provider_disabled");
+    expect(photoResponse.status).toBe(503);
+    expect(photo).toEqual({ error: { code: "live_photo_inventory_unavailable" } });
     expect(photoBodyRead).toBe(false);
 
     let jsonBodyRead = false;
@@ -141,6 +143,52 @@ describe("live experience API route", () => {
     const providerBody = JSON.parse(String(fetchSpy.mock.calls[0]?.[1]?.body));
     expect(providerBody.store).toBe(false);
     expect(JSON.stringify(providerBody)).not.toContain("with-metadata");
+  });
+
+  it("never substitutes the seeded Kitchen inventory when live photo analysis fails", async () => {
+    process.env.OPENAI_API_KEY = "test-key";
+    process.env.RUMMAGELAB_LIVE_OPENAI_ENABLED = "true";
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("rate limited", { status: 429 }));
+    const form = new FormData();
+    form.set("operation", "photo_inventory");
+    form.set("objectOnlyConfirmed", "true");
+    form.set("ageStage", "3-4y");
+    form.set("photo", new Blob([await objectPhoto()], { type: "image/jpeg" }), "unrelated.jpg");
+
+    const response = await POST(new Request("http://local/api/live-experience", {
+      method: "POST",
+      body: form,
+    }));
+    const body = await response.json();
+
+    expect(response.status).toBe(503);
+    expect(body).toEqual({ error: { code: "live_photo_inventory_unavailable" } });
+    expect(JSON.stringify(body)).not.toContain("kitchen");
+    expect(JSON.stringify(body)).not.toContain("unrelated");
+  });
+
+  it("fails closed when the live photo inventory is malformed", async () => {
+    process.env.OPENAI_API_KEY = "test-key";
+    process.env.RUMMAGELAB_LIVE_OPENAI_ENABLED = "true";
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(providerResponse({
+      imageMode: "live",
+      suggestedItems: [{ suggestedLabel: "unvalidated", allowedMaterialCategory: "not-allowed" }],
+    }));
+    const form = new FormData();
+    form.set("operation", "photo_inventory");
+    form.set("objectOnlyConfirmed", "true");
+    form.set("ageStage", "3-4y");
+    form.set("photo", new Blob([await objectPhoto()], { type: "image/jpeg" }), "malformed.jpg");
+
+    const response = await POST(new Request("http://local/api/live-experience", {
+      method: "POST",
+      body: form,
+    }));
+
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({
+      error: { code: "live_photo_inventory_unavailable" },
+    });
   });
 
   it("falls back for a missing key or malformed provider activity without leaking raw errors", async () => {
