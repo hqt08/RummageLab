@@ -1,4 +1,4 @@
-import type { AllowedMaterialCategory } from "../schemas";
+import type { AllowedMaterialCategory, ObjectSafetyLevel, PhotoInventory } from "../schemas";
 
 import { containsHardDenylistedTerm } from "./hard-denylist";
 import { KITCHEN_SOUND_REQUIRED_MATERIALS } from "./kitchen-sound-detectives";
@@ -368,4 +368,79 @@ export function normalizeKitchenSoundTypedMaterials(
     missing: [...missing],
     inputError: null,
   };
+}
+
+/**
+ * A parent-facing candidate object, carried through intake and confirmation with
+ * a stable per-session id so several distinct open objects (all mapped to the
+ * `other_safe_object` category) stay independently selectable. `label` follows
+ * the object into activity planning; `category` still drives template gating.
+ */
+export type VettedCandidate = {
+  id: string;
+  label: string;
+  category: AllowedMaterialCategory;
+  safetyLevel: ObjectSafetyLevel;
+  warnings: string[];
+};
+
+/** Stable within a session; derived from the label so repeats collapse. */
+export function vettedCandidateId(label: string): string {
+  return normalizeLabel(label) || label.trim().toLowerCase();
+}
+
+function toVettedCandidate(input: {
+  label: string;
+  category: AllowedMaterialCategory;
+  safetyLevel?: ObjectSafetyLevel;
+  warnings?: readonly string[];
+}): VettedCandidate {
+  return {
+    id: vettedCandidateId(input.label),
+    label: input.label,
+    category: input.category,
+    safetyLevel: input.safetyLevel ?? "ok",
+    warnings: input.warnings ? [...input.warnings] : [],
+  };
+}
+
+/** Dedupe by id, preserving first occurrence. */
+export function dedupeVettedCandidates(
+  candidates: readonly VettedCandidate[],
+): VettedCandidate[] {
+  const seen = new Set<string>();
+  const result: VettedCandidate[] = [];
+  for (const candidate of candidates) {
+    if (seen.has(candidate.id)) continue;
+    seen.add(candidate.id);
+    result.push(candidate);
+  }
+  return result;
+}
+
+/** Map a parent-vetted photo/typed inventory to selectable candidates. */
+export function photoInventoryToCandidates(
+  inventory: PhotoInventory,
+): VettedCandidate[] {
+  return dedupeVettedCandidates(
+    inventory.suggestedItems.map((item) =>
+      toVettedCandidate({
+        label: item.suggestedLabel,
+        category: item.allowedMaterialCategory,
+        safetyLevel: item.safetyLevel,
+        warnings: item.warnings,
+      }),
+    ),
+  );
+}
+
+/** Map the offline typed-allowlist matches to selectable candidates. */
+export function typedMatchesToCandidates(
+  matches: readonly TypedMaterialMatch[],
+): VettedCandidate[] {
+  return dedupeVettedCandidates(
+    matches.map((match) =>
+      toVettedCandidate({ label: match.displayLabel, category: match.category }),
+    ),
+  );
 }

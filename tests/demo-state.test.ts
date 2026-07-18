@@ -8,7 +8,10 @@ import {
   type KitchenSoundDemoAction,
   type KitchenSoundDemoState,
 } from "../src/lib/demo/demo-state";
-import { KITCHEN_SOUND_REQUIRED_MATERIALS } from "../src/lib/demo/kitchen-sound-detectives";
+import {
+  vettedCandidateId,
+  type VettedCandidate,
+} from "../src/lib/demo/material-intake";
 import { NextActivityContextSchema } from "../src/lib/schemas";
 
 function reduce(
@@ -18,16 +21,25 @@ function reduce(
   return actions.reduce(kitchenSoundDemoReducer, state);
 }
 
-function readyKitState(): KitchenSoundDemoState {
-  const materialActions: KitchenSoundDemoAction[] =
-    KITCHEN_SOUND_REQUIRED_MATERIALS.map((material) => ({
-      type: "TOGGLE_MATERIAL",
-      material,
-    }));
+/** The three seeded prepared-kit candidates, as the reducer builds them. */
+const KITCHEN_CANDIDATES = createInitialKitchenSoundDemoState().intakeCandidates;
 
+const BALL_CANDIDATE: VettedCandidate = {
+  id: vettedCandidateId("Large soft ball"),
+  label: "Large soft ball",
+  category: "large_soft_ball",
+  safetyLevel: "ok",
+  warnings: [],
+};
+
+function confirmAll(candidates: readonly VettedCandidate[]): KitchenSoundDemoAction[] {
+  return candidates.map((candidate) => ({ type: "TOGGLE_OBJECT", id: candidate.id }));
+}
+
+function readyKitState(): KitchenSoundDemoState {
   return reduce(
     createInitialKitchenSoundDemoState(),
-    ...materialActions,
+    ...confirmAll(KITCHEN_CANDIDATES),
     { type: "SET_WEATHER_APPROVED", approved: true },
     { type: "SET_SAFETY_CONFIRMED", confirmed: true },
   );
@@ -50,7 +62,7 @@ describe("Kitchen Sound Detectives confirmation gates", () => {
     });
 
     expect(infantStage.selectedAgeStage).toBe("0-12m");
-    expect(infantStage.confirmedMaterials).toEqual([]);
+    expect(infantStage.confirmedObjects).toEqual([]);
     expect(infantStage.parentConfirmedSafety).toBe(false);
     expect(canStartKitchenSoundQuest(infantStage)).toBe(false);
   });
@@ -71,12 +83,13 @@ describe("Kitchen Sound Detectives confirmation gates", () => {
     expect(started.activityContext?.weather?.parentApproved).toBe(true);
     expect(started.activityContext?.confirmedMaterials).toHaveLength(3);
 
+    // A duplicated confirmed object (same id) must fail the uniqueness gate.
     expect(
       canStartKitchenSoundQuest({
         ...ready,
-        confirmedMaterials: [
-          ...ready.confirmedMaterials,
-          ready.confirmedMaterials[0],
+        confirmedObjects: [
+          ...ready.confirmedObjects,
+          ready.confirmedObjects[0],
         ],
       }),
     ).toBe(false);
@@ -101,23 +114,15 @@ describe("Kitchen Sound Detectives confirmation gates", () => {
     });
 
     expect(sourceChanged.materialSource).toBe("typed");
-    expect(sourceChanged.confirmedMaterials).toEqual([]);
+    expect(sourceChanged.confirmedObjects).toEqual([]);
     expect(sourceChanged.parentConfirmedSafety).toBe(false);
     expect(sourceChanged.parentApprovedWeather).toBe(true);
     expect(canStartKitchenSoundQuest(sourceChanged)).toBe(false);
 
     const typedReady = reduce(
       sourceChanged,
-      {
-        type: "SET_MATERIAL_CANDIDATES",
-        materials: [...KITCHEN_SOUND_REQUIRED_MATERIALS],
-      },
-      ...KITCHEN_SOUND_REQUIRED_MATERIALS.map(
-        (material): KitchenSoundDemoAction => ({
-          type: "TOGGLE_MATERIAL",
-          material,
-        }),
-      ),
+      { type: "SET_OBJECT_CANDIDATES", candidates: [...KITCHEN_CANDIDATES] },
+      ...confirmAll(KITCHEN_CANDIDATES),
       { type: "SET_SAFETY_CONFIRMED", confirmed: true },
     );
     const started = kitchenSoundDemoReducer(typedReady, {
@@ -130,15 +135,35 @@ describe("Kitchen Sound Detectives confirmation gates", () => {
   it("accepts a parent-confirmed large soft ball only after current intake, weather, and safety gates", () => {
     const ballReady = reduce(
       kitchenSoundDemoReducer(createInitialKitchenSoundDemoState(), { type: "SET_MATERIAL_SOURCE", source: "photo" }),
-      { type: "SET_MATERIAL_CANDIDATES", materials: ["large_soft_ball"] },
-      { type: "TOGGLE_MATERIAL", material: "large_soft_ball" },
+      { type: "SET_OBJECT_CANDIDATES", candidates: [BALL_CANDIDATE] },
+      { type: "TOGGLE_OBJECT", id: BALL_CANDIDATE.id },
       { type: "SET_WEATHER_APPROVED", approved: true },
       { type: "SET_SAFETY_CONFIRMED", confirmed: true },
     );
     expect(canStartKitchenSoundQuest(ballReady)).toBe(true);
     const started = kitchenSoundDemoReducer(ballReady, { type: "START_QUEST" });
     expect(started.activityContext?.confirmedMaterials).toEqual([
-      { allowedMaterialCategory: "large_soft_ball", parentConfirmed: true },
+      { allowedMaterialCategory: "large_soft_ball", parentConfirmed: true, label: "Large soft ball" },
+    ]);
+  });
+
+  it("carries several distinct open objects (sharing the open category) into context", () => {
+    const duck: VettedCandidate = { id: vettedCandidateId("Rubber duck"), label: "Rubber duck", category: "other_safe_object", safetyLevel: "caution", warnings: ["Keep out of the mouth."] };
+    const egg: VettedCandidate = { id: vettedCandidateId("Egg"), label: "Egg", category: "other_safe_object", safetyLevel: "caution", warnings: [] };
+    const ready = reduce(
+      kitchenSoundDemoReducer(createInitialKitchenSoundDemoState(), { type: "SET_MATERIAL_SOURCE", source: "photo" }),
+      { type: "SET_OBJECT_CANDIDATES", candidates: [duck, egg] },
+      { type: "TOGGLE_OBJECT", id: duck.id },
+      { type: "TOGGLE_OBJECT", id: egg.id },
+      { type: "SET_WEATHER_APPROVED", approved: true },
+      { type: "SET_SAFETY_CONFIRMED", confirmed: true },
+    );
+    expect(ready.confirmedObjects).toHaveLength(2);
+    expect(canStartKitchenSoundQuest(ready)).toBe(true);
+    const started = kitchenSoundDemoReducer(ready, { type: "START_QUEST" });
+    expect(started.activityContext?.confirmedMaterials).toEqual([
+      { allowedMaterialCategory: "other_safe_object", parentConfirmed: true, label: "Rubber duck" },
+      { allowedMaterialCategory: "other_safe_object", parentConfirmed: true, label: "Egg" },
     ]);
   });
 
@@ -148,20 +173,16 @@ describe("Kitchen Sound Detectives confirmation gates", () => {
         type: "SET_MATERIAL_SOURCE",
         source,
       });
+      // Toggling ids that are not in the (now empty) candidate list is a no-op.
       const attempted = reduce(
         sourceChanged,
-        ...KITCHEN_SOUND_REQUIRED_MATERIALS.map(
-          (material): KitchenSoundDemoAction => ({
-            type: "TOGGLE_MATERIAL",
-            material,
-          }),
-        ),
+        ...confirmAll(KITCHEN_CANDIDATES),
         { type: "SET_SAFETY_CONFIRMED", confirmed: true },
         { type: "START_QUEST" },
       );
 
       expect(attempted.phase).toBe("kit_review");
-      expect(attempted.confirmedMaterials).toEqual([]);
+      expect(attempted.confirmedObjects).toEqual([]);
       expect(attempted.activityContext).toBeNull();
     }
   });
@@ -257,7 +278,7 @@ describe("Kitchen Sound Detectives reflection and next-step state", () => {
 
     expect(reset).toEqual(fresh);
     expect(reset).not.toBe(fresh);
-    expect(reset.confirmedMaterials).not.toBe(fresh.confirmedMaterials);
+    expect(reset.confirmedObjects).not.toBe(fresh.confirmedObjects);
     expect(reset.selectedWeatherTags).not.toBe(fresh.selectedWeatherTags);
   });
 });

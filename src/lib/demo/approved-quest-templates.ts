@@ -33,19 +33,25 @@ function hasExactKitchenSoundKit(materials: readonly AllowedMaterialCategory[]):
     KITCHEN_SOUND_REQUIRED_MATERIALS.every((material) => materials.includes(material));
 }
 
+export type ConfirmedMaterialInput = {
+  allowedMaterialCategory: AllowedMaterialCategory;
+  label?: string;
+};
+
 export function createApprovedActivityContext(input: {
   ageStage?: ActivityContext["ageStage"];
   materialSource: MaterialIntakeSource;
-  confirmedMaterials: readonly AllowedMaterialCategory[];
+  confirmedMaterials: readonly ConfirmedMaterialInput[];
   approvedWeatherTags: ApprovedWeatherTags;
   parentConfirmedSafety: boolean;
 }): ActivityContext {
   return ActivityContextSchema.parse({
     ageStage: input.ageStage ?? "3-4y",
     materialSource: input.materialSource,
-    confirmedMaterials: input.confirmedMaterials.map((allowedMaterialCategory) => ({
-      allowedMaterialCategory,
+    confirmedMaterials: input.confirmedMaterials.map((material) => ({
+      allowedMaterialCategory: material.allowedMaterialCategory,
       parentConfirmed: true,
+      ...(material.label ? { label: material.label } : {}),
     })),
     weather: {
       source: "seeded_demo",
@@ -120,22 +126,29 @@ function createEverydayObjectNoticingQuest(context: ActivityContext): QuestSpec 
 }
 
 export function canStartApprovedQuest(input: {
-  confirmedMaterials: readonly AllowedMaterialCategory[];
-  intakeCandidateMaterials: readonly AllowedMaterialCategory[];
+  confirmedObjects: readonly { id: string; category: AllowedMaterialCategory; label: string }[];
+  candidateIds: readonly string[];
   approvedWeatherTags: ApprovedWeatherTags;
   parentApprovedWeather: boolean;
   parentConfirmedSafety: boolean;
+  materialSource?: MaterialIntakeSource;
 }): boolean {
   if (!input.parentApprovedWeather || input.approvedWeatherTags.length < 1 || input.approvedWeatherTags.length > 4 || !input.parentConfirmedSafety) return false;
-  if (input.confirmedMaterials.length === 0 || input.intakeCandidateMaterials.length === 0) return false;
-  if (new Set(input.confirmedMaterials).size !== input.confirmedMaterials.length) return false;
-  if (!input.confirmedMaterials.every((material) => input.intakeCandidateMaterials.includes(material))) return false;
+  if (input.confirmedObjects.length === 0 || input.candidateIds.length === 0) return false;
+  const ids = input.confirmedObjects.map((object) => object.id);
+  if (new Set(ids).size !== ids.length) return false;
+  if (!ids.every((id) => input.candidateIds.includes(id))) return false;
   const context = createApprovedActivityContext({
-    materialSource: "typed",
-    confirmedMaterials: input.confirmedMaterials,
+    materialSource: input.materialSource ?? "typed",
+    confirmedMaterials: input.confirmedObjects.map((object) => ({
+      allowedMaterialCategory: object.category,
+      label: object.label,
+    })),
     approvedWeatherTags: input.approvedWeatherTags,
     parentConfirmedSafety: input.parentConfirmedSafety,
   });
+  // A reviewed fallback template must exist for this context so a failed live
+  // generation is always recoverable; the live path still authors a fresh one.
   return availableApprovedQuestTemplateIds(context).length === 1;
 }
 

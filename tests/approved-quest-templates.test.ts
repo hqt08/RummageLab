@@ -7,11 +7,14 @@ import {
   resolveApprovedQuestTemplate,
 } from "../src/lib/demo/approved-quest-templates";
 import { KITCHEN_SOUND_REQUIRED_MATERIALS } from "../src/lib/demo/kitchen-sound-detectives";
+import type { AllowedMaterialCategory } from "../src/lib/schemas";
 
-function context(materials: Parameters<typeof createApprovedActivityContext>[0]["confirmedMaterials"]) {
+function context(categories: readonly AllowedMaterialCategory[]) {
   return createApprovedActivityContext({
     materialSource: "photo",
-    confirmedMaterials: materials,
+    confirmedMaterials: categories.map((allowedMaterialCategory) => ({
+      allowedMaterialCategory,
+    })),
     approvedWeatherTags: ["rainy"],
     parentConfirmedSafety: true,
   });

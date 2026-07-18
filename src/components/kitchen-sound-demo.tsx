@@ -11,6 +11,9 @@ import React, {
 
 import { SoundMixTool } from "./sound-mix-tool";
 import { PredictTool } from "./predict-tool";
+import { SortTool } from "./sort-tool";
+import { MeasureTool } from "./measure-tool";
+import { FieldJournalTool } from "./field-journal-tool";
 import {
   canCreateKitchenSoundNextSuggestion,
   canStartKitchenSoundQuest,
@@ -23,7 +26,6 @@ import {
   KITCHEN_SOUND_DEMO_LOCATION_LABEL,
   KITCHEN_SOUND_AVAILABLE_WEATHER_TAGS,
   KITCHEN_SOUND_REQUIRED_MATERIALS,
-  kitchenSoundPhotoInventory,
   kitchenSoundQuest,
   type DemoObservationTag,
   type DemoWeatherTag,
@@ -42,12 +44,15 @@ import {
   createLocalPhotoPreview,
   guardTypedObjectLabels,
   normalizeKitchenSoundTypedMaterials,
+  photoInventoryToCandidates,
   readLocalObjectPhotoDimensions,
   releaseLocalPhotoPreview,
+  typedMatchesToCandidates,
   validateLocalObjectPhoto,
   validateLocalObjectPhotoContent,
   validateLocalObjectPhotoDimensions,
   type MaterialIntakeSource,
+  type VettedCandidate,
 } from "../lib/demo/material-intake";
 import type { AllowedMaterialCategory, PhotoInventory, QuestSpec } from "../lib/schemas";
 import {
@@ -150,7 +155,7 @@ export function photoAnalysisResult(payload: PhotoInventoryResponse) {
       livePhotoAnalysisAvailable: false,
       inventory: null,
       source: null,
-      candidates: [] as AllowedMaterialCategory[],
+      candidates: [] as VettedCandidate[],
     };
   }
 
@@ -158,7 +163,7 @@ export function photoAnalysisResult(payload: PhotoInventoryResponse) {
     livePhotoAnalysisAvailable: true,
     inventory: payload.inventory,
     source: payload.runtime.source === "live_provider" ? "live_provider" as const : "seeded_fallback" as const,
-    candidates: payload.inventory.suggestedItems.map((item) => item.allowedMaterialCategory),
+    candidates: photoInventoryToCandidates(payload.inventory),
   };
 }
 
@@ -202,7 +207,7 @@ export function KitchenSoundDemo() {
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [runtimePreviewStatus, setRuntimePreviewStatus] =
     useState<RuntimePreviewStatus>("idle");
-  const [liveInventory, setLiveInventory] = useState<PhotoInventory | null>(null);
+  const [, setLiveInventory] = useState<PhotoInventory | null>(null);
   const [typedLiveInventory, setTypedLiveInventory] = useState<PhotoInventory | null>(null);
   const [typedInventoryStatus, setTypedInventoryStatus] = useState<RuntimePreviewStatus>("idle");
   const [typedInventoryMessage, setTypedInventoryMessage] = useState<string | null>(null);
@@ -230,25 +235,12 @@ export function KitchenSoundDemo() {
     [typedMaterialText],
   );
 
-  const suggestedMaterialItems =
-    state.materialSource === "typed"
-      ? (typedLiveInventory?.suggestedItems ?? typedMaterialNormalization.accepted.map((item) => ({
-          suggestedLabel: item.displayLabel,
-          allowedMaterialCategory: item.category,
-          safetyLevel: "ok" as const,
-          warnings: [] as string[],
-        })))
-      : state.materialSource === "photo"
-        ? liveInventory?.suggestedItems ?? []
-        : kitchenSoundPhotoInventory.suggestedItems;
+  // The reducer keeps `intakeCandidates` in sync across every intake source
+  // (seeded, live photo, live typed, offline typed allowlist), so the parent
+  // confirmation desk renders from one unified, per-object list.
+  const suggestedMaterialItems = state.intakeCandidates;
 
-  const materialSuggestionsReady =
-    state.materialSource === "seeded_demo" ||
-    (state.materialSource === "photo" && liveInventory !== null) ||
-    (state.materialSource === "typed" &&
-      ((typedLiveInventory !== null) ||
-        (typedMaterialNormalization.accepted.length > 0 &&
-          typedMaterialNormalization.inputError === null)));
+  const materialSuggestionsReady = state.intakeCandidates.length > 0;
 
   useEffect(() => {
     if (!shouldFocusStageRef.current) {
@@ -343,7 +335,7 @@ export function KitchenSoundDemo() {
     if (photoInputRef.current) {
       photoInputRef.current.value = "";
     }
-    dispatch({ type: "SET_MATERIAL_CANDIDATES", materials: [] });
+    dispatch({ type: "SET_OBJECT_CANDIDATES", candidates: [] });
   }
 
   function chooseMaterialSource(source: MaterialIntakeSource) {
@@ -389,10 +381,10 @@ export function KitchenSoundDemo() {
     setTypedInventoryStatus("idle");
     setTypedInventoryMessage(null);
     dispatch({
-      type: "SET_MATERIAL_CANDIDATES",
-      materials:
+      type: "SET_OBJECT_CANDIDATES",
+      candidates:
         normalization.inputError === null
-          ? normalization.accepted.map((item) => item.category)
+          ? typedMatchesToCandidates(normalization.accepted)
           : [],
     });
   }
@@ -434,7 +426,7 @@ export function KitchenSoundDemo() {
         return;
       }
       setTypedLiveInventory(result.inventory);
-      dispatch({ type: "SET_MATERIAL_CANDIDATES", materials: result.candidates });
+      dispatch({ type: "SET_OBJECT_CANDIDATES", candidates: result.candidates });
       setTypedInventoryStatus(payload.runtime.source === "seeded_fallback" ? "fallback" : "idle");
       setTypedInventoryMessage(payload.runtime.source === "live_provider"
         ? "GPT-5.6 suggested safe categories. Confirm every category yourself."
@@ -461,7 +453,7 @@ export function KitchenSoundDemo() {
     setObjectOnlyConsent(false);
     setLiveSource(null);
     photoFileRef.current = null;
-    dispatch({ type: "SET_MATERIAL_CANDIDATES", materials: [] });
+    dispatch({ type: "SET_OBJECT_CANDIDATES", candidates: [] });
 
     if (!file) {
       return;
@@ -539,7 +531,7 @@ export function KitchenSoundDemo() {
     if (!file || !canSendPhotoForLiveAnalysis(livePhotoAnalysisAvailable, file, objectOnlyConsent)) {
       setLiveInventory(null);
       setLiveSource(null);
-      dispatch({ type: "SET_MATERIAL_CANDIDATES", materials: [] });
+      dispatch({ type: "SET_OBJECT_CANDIDATES", candidates: [] });
       return;
     }
     const requestVersion = ++runtimeRequestVersionRef.current;
@@ -547,7 +539,7 @@ export function KitchenSoundDemo() {
     setPhotoError(null);
     setLiveInventory(null);
     setLiveSource(null);
-    dispatch({ type: "SET_MATERIAL_CANDIDATES", materials: [] });
+    dispatch({ type: "SET_OBJECT_CANDIDATES", candidates: [] });
     const body = new FormData();
     body.set("operation", "photo_inventory");
     body.set("objectOnlyConfirmed", "true");
@@ -562,8 +554,8 @@ export function KitchenSoundDemo() {
       setLiveInventory(result.inventory);
       setLiveSource(result.source);
       dispatch({
-        type: "SET_MATERIAL_CANDIDATES",
-        materials: result.candidates,
+        type: "SET_OBJECT_CANDIDATES",
+        candidates: result.candidates,
       });
       if (!result.livePhotoAnalysisAvailable) {
         setRuntimePreviewStatus("idle");
@@ -576,7 +568,7 @@ export function KitchenSoundDemo() {
       setRuntimePreviewStatus("error");
       setLiveInventory(null);
       setLiveSource(null);
-      dispatch({ type: "SET_MATERIAL_CANDIDATES", materials: [] });
+      dispatch({ type: "SET_OBJECT_CANDIDATES", candidates: [] });
       setPhotoError("Live analysis could not prepare a safe inventory. Retry or use the prepared kit.");
     }
   }
@@ -589,7 +581,10 @@ export function KitchenSoundDemo() {
       const activityContext = createApprovedActivityContext({
         ageStage: state.selectedAgeStage,
         materialSource: state.materialSource,
-        confirmedMaterials: state.confirmedMaterials,
+        confirmedMaterials: state.confirmedObjects.map((object) => ({
+          allowedMaterialCategory: object.category,
+          label: object.label,
+        })),
         approvedWeatherTags: state.selectedWeatherTags,
         parentConfirmedSafety: state.parentConfirmedSafety,
       });
@@ -609,7 +604,10 @@ export function KitchenSoundDemo() {
     const activityContext = createApprovedActivityContext({
       ageStage: state.selectedAgeStage,
       materialSource: state.materialSource,
-      confirmedMaterials: state.confirmedMaterials,
+      confirmedMaterials: state.confirmedObjects.map((object) => ({
+        allowedMaterialCategory: object.category,
+        label: object.label,
+      })),
       approvedWeatherTags: state.selectedWeatherTags,
       parentConfirmedSafety: state.parentConfirmedSafety,
     });
@@ -624,7 +622,7 @@ export function KitchenSoundDemo() {
       const contextStillMatches =
         current.materialSource === activityContext.materialSource &&
         current.parentConfirmedSafety === activityContext.parentConfirmedSafety &&
-        JSON.stringify(current.confirmedMaterials) === JSON.stringify(state.confirmedMaterials) &&
+        JSON.stringify(current.confirmedObjects) === JSON.stringify(state.confirmedObjects) &&
         JSON.stringify(current.selectedWeatherTags) === JSON.stringify(state.selectedWeatherTags) &&
         current.parentApprovedWeather;
       if (runtimeRequestVersionRef.current !== requestVersion || !contextStillMatches || payload.experience.experienceMode !== "guided_quest") return;
@@ -648,7 +646,10 @@ export function KitchenSoundDemo() {
     const activityContext = createApprovedActivityContext({
       ageStage: state.selectedAgeStage,
       materialSource: state.materialSource,
-      confirmedMaterials: state.confirmedMaterials,
+      confirmedMaterials: state.confirmedObjects.map((object) => ({
+        allowedMaterialCategory: object.category,
+        label: object.label,
+      })),
       approvedWeatherTags: state.selectedWeatherTags,
       parentConfirmedSafety: state.parentConfirmedSafety,
     });
@@ -742,10 +743,11 @@ export function KitchenSoundDemo() {
 
   const selectedAgeOption = findDemoAgeStageOption(state.selectedAgeStage);
   const isKitchenSoundAge = state.selectedAgeStage === "3-4y";
+  const confirmedCategories = state.confirmedObjects.map((object) => object.category);
   const hasKitchenSoundKit =
-    state.confirmedMaterials.length === KITCHEN_SOUND_REQUIRED_MATERIALS.length &&
+    confirmedCategories.length === KITCHEN_SOUND_REQUIRED_MATERIALS.length &&
     KITCHEN_SOUND_REQUIRED_MATERIALS.every((material) =>
-      state.confirmedMaterials.includes(material),
+      confirmedCategories.includes(material),
     );
   const canStart = canStartKitchenSoundQuest(state);
   const gateParts = [
@@ -761,7 +763,7 @@ export function KitchenSoundDemo() {
     typedMaterialNormalization.inputError !== null
       ? "a shorter material list"
       : null,
-    state.confirmedMaterials.length === 0
+    state.confirmedObjects.length === 0
       ? "one parent-confirmed material"
       : null,
     state.selectedWeatherTags.length === 0 ? "one weather tag" : null,
@@ -993,7 +995,7 @@ export function KitchenSoundDemo() {
                     {photoPreviewUrl ? (
                       <>
                         <label className="approval-row">
-                          <input checked={objectOnlyConsent} onChange={(event) => { const checked = event.currentTarget.checked; setObjectOnlyConsent(checked); if (!checked) { runtimeRequestVersionRef.current += 1; setLiveInventory(null); setLiveSource(null); dispatch({ type: "SET_MATERIAL_CANDIDATES", materials: [] }); } }} type="checkbox" />
+                          <input checked={objectOnlyConsent} onChange={(event) => { const checked = event.currentTarget.checked; setObjectOnlyConsent(checked); if (!checked) { runtimeRequestVersionRef.current += 1; setLiveInventory(null); setLiveSource(null); dispatch({ type: "SET_OBJECT_CANDIDATES", candidates: [] }); } }} type="checkbox" />
                           <span className="check-copy">I confirm this photo shows objects only<span className="check-detail">No people, faces, mail, labels, screens, or identifying details.</span></span>
                         </label>
                         <div className="button-row">
@@ -1151,26 +1153,23 @@ export function KitchenSoundDemo() {
                   <legend>Confirm the material kit</legend>
                   <div className="check-list">
                     {suggestedMaterialItems.map((item) => {
-                      const checked = state.confirmedMaterials.includes(
-                        item.allowedMaterialCategory,
+                      const checked = state.confirmedObjects.some(
+                        (object) => object.id === item.id,
                       );
 
                       return (
-                        <label className="check-row" key={item.allowedMaterialCategory}>
+                        <label className="check-row" key={item.id}>
                           <input
                             checked={checked}
                             onChange={() =>
-                              dispatch({
-                                type: "TOGGLE_MATERIAL",
-                                material: item.allowedMaterialCategory,
-                              })
+                              dispatch({ type: "TOGGLE_OBJECT", id: item.id })
                             }
                             type="checkbox"
                           />
                           <span className="check-copy">
-                            {item.suggestedLabel}
+                            {item.label}
                             <span className="check-detail">
-                              {materialDetails[item.allowedMaterialCategory]}
+                              {materialDetails[item.category]}
                             </span>
                             {item.warnings.length > 0 ? (
                               <span className="check-warning" role="note">
@@ -1411,6 +1410,12 @@ export function KitchenSoundDemo() {
                     selectedOption={predictionChoice}
                     spec={activeQuest.tool}
                   />
+                ) : activeQuest.tool.kind === "sort" ? (
+                  <SortTool spec={activeQuest.tool} />
+                ) : activeQuest.tool.kind === "measure" ? (
+                  <MeasureTool spec={activeQuest.tool} />
+                ) : activeQuest.tool.kind === "field_journal" ? (
+                  <FieldJournalTool spec={activeQuest.tool} />
                 ) : null}
 
                 <div className="button-row">
