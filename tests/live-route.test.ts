@@ -47,6 +47,7 @@ const validGeneratedKitchenQuest = {
 
 const originalKey = process.env.OPENAI_API_KEY;
 const originalLiveSwitch = process.env.RUMMAGELAB_LIVE_OPENAI_ENABLED;
+const originalReasoningEffort = process.env.RUMMAGELAB_OPENAI_REASONING_EFFORT;
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -54,6 +55,8 @@ afterEach(() => {
   else process.env.OPENAI_API_KEY = originalKey;
   if (originalLiveSwitch === undefined) delete process.env.RUMMAGELAB_LIVE_OPENAI_ENABLED;
   else process.env.RUMMAGELAB_LIVE_OPENAI_ENABLED = originalLiveSwitch;
+  if (originalReasoningEffort === undefined) delete process.env.RUMMAGELAB_OPENAI_REASONING_EFFORT;
+  else process.env.RUMMAGELAB_OPENAI_REASONING_EFFORT = originalReasoningEffort;
 });
 
 async function objectPhoto() {
@@ -248,6 +251,7 @@ describe("live experience API route", () => {
   it("authors a live activity for a live context when both capability settings are present", async () => {
     process.env.OPENAI_API_KEY = "test-key";
     process.env.RUMMAGELAB_LIVE_OPENAI_ENABLED = "true";
+    delete process.env.RUMMAGELAB_OPENAI_REASONING_EFFORT;
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(providerResponse(validGeneratedKitchenQuest));
     const response = await POST(new Request("http://local/api/live-experience", {
       method: "POST", headers: { "content-type": "application/json" },
@@ -257,6 +261,22 @@ describe("live experience API route", () => {
     expect(body.runtime.source).toBe("live_provider");
     expect(body.experience.activitySummary).toBe("A short sound-comparison game with the confirmed kitchen items.");
     expect(fetchSpy).toHaveBeenCalledOnce();
+    const requestBody = JSON.parse(String(fetchSpy.mock.calls[0]?.[1]?.body));
+    expect(requestBody.reasoning).toEqual({ effort: "low" });
+  });
+
+  it("passes an owner-configured reasoning effort only to live activity authoring", async () => {
+    process.env.OPENAI_API_KEY = "test-key";
+    process.env.RUMMAGELAB_LIVE_OPENAI_ENABLED = "true";
+    process.env.RUMMAGELAB_OPENAI_REASONING_EFFORT = "medium";
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(providerResponse(validGeneratedKitchenQuest));
+    const response = await POST(new Request("http://local/api/live-experience", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ operation: "experience_selection", fixtureId: "kitchen-sound-detectives", activityContext: photoActivityContext }),
+    }));
+    expect(response.status).toBe(200);
+    const requestBody = JSON.parse(String(fetchSpy.mock.calls[0]?.[1]?.body));
+    expect(requestBody.reasoning).toEqual({ effort: "medium" });
   });
 
   it("keeps the seeded prepared kit deterministic (no model call) even with live enabled", async () => {

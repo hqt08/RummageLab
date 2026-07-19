@@ -162,6 +162,7 @@ describe("per-band live generation", () => {
     expect(result).toMatchObject({ experienceMode: "co_play", ageStage: "12-36m" });
     const body = JSON.parse(String((fetchImpl as unknown as ReturnType<typeof vi.fn>).mock.calls[0]?.[1]?.body));
     expect(body.text.format.name).toBe("generated_moment");
+    expect(body.reasoning).toEqual({ effort: "low" });
     // The under-three schema constrains materials to the smaller allowlist.
     expect(JSON.stringify(body.text.format.schema)).not.toContain("other_safe_object");
     expect(JSON.stringify(body)).toContain("big soft ball");
@@ -204,6 +205,7 @@ describe("per-band live generation", () => {
     expect(result).toMatchObject({ ageStage: "4-6y", tool: { kind: "measure" } });
     const body = JSON.parse(String((fetchImpl as unknown as ReturnType<typeof vi.fn>).mock.calls[0]?.[1]?.body));
     expect(body.text.format.schema.properties.ageStage.enum).toEqual(["4-6y"]);
+    expect(body.reasoning).toEqual({ effort: "low" });
   });
 
   it("keeps every band's seeded prepared kit deterministic with no model call", async () => {

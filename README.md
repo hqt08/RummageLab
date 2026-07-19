@@ -191,10 +191,17 @@ OPENAI_API_KEY=your-development-key
 RUMMAGELAB_LIVE_OPENAI_ENABLED=true
 # Optional: select a faster/cheaper model tier. Defaults to gpt-5.6 when unset.
 RUMMAGELAB_OPENAI_MODEL=gpt-5.6
+# Optional: activity/moment generation defaults to low reasoning for lower latency.
+# Allowed GPT-5.6 values: none, low, medium, high, xhigh, max.
+RUMMAGELAB_OPENAI_REASONING_EFFORT=low
 ```
 
 The live slice defaults to `gpt-5.6`; set `RUMMAGELAB_OPENAI_MODEL` to point the
-Responses API at a faster or cheaper tier without a code change. It runs only when
+Responses API at a faster or cheaper tier without a code change. Activity and
+under-three moment authoring use `low` reasoning by default; set
+`RUMMAGELAB_OPENAI_REASONING_EFFORT` to a supported GPT-5.6 value to tune that
+trade-off. Photo and typed-object inventory mapping do not receive this setting.
+Live mode runs only when
 both `RUMMAGELAB_LIVE_OPENAI_ENABLED === "true"` and `OPENAI_API_KEY` are present;
 otherwise it fails closed before server photo parsing, image sanitization,
 provider construction, or an outbound model request. Object mapping uses a 20s

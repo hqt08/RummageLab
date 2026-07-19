@@ -45,6 +45,8 @@ export type OpenAIProviderOptions = {
   timeoutMs?: number;
   /** Model id for the Responses API. Owner-configurable to select a faster tier. */
   model?: string;
+  /** Applied only to slower activity/moment authoring, never object inventory. */
+  reasoningEffort?: "none" | "low" | "medium" | "high" | "xhigh" | "max";
 };
 
 export const DEFAULT_OPENAI_MODEL = "gpt-5.6";
@@ -370,6 +372,7 @@ export function createOpenAIExperienceProvider(
     schema: object,
     content: Array<Record<string, unknown>>,
     callTimeoutMs: number = timeoutMs,
+    reasoningEffort?: OpenAIProviderOptions["reasoningEffort"],
   ): Promise<unknown> {
     if (!options.apiKey?.trim()) {
       throw new RuntimeProviderFailure("provider_unavailable");
@@ -387,6 +390,7 @@ export function createOpenAIExperienceProvider(
         body: JSON.stringify({
           model: options.model?.trim() || DEFAULT_OPENAI_MODEL,
           store: false,
+          ...(reasoningEffort ? { reasoning: { effort: reasoningEffort } } : {}),
           input: [{ role: "user", content }],
           text: { format: { type: "json_schema", name, strict: true, schema } },
         }),
@@ -496,6 +500,7 @@ export function createOpenAIExperienceProvider(
             text: `Author one short, gentle, caregiver-led moment for a ${context.ageStage} child using these parent-confirmed large everyday objects. This is screen-free for the child: the adultScript (2-5 short lines) tells the grown-up what to do and say, referring to the objects by their labels. Rules: ageStage "${context.ageStage}"; experienceMode "${mode}"; developmentalFocusIds only from ${JSON.stringify(DEVELOPMENTAL_FOCUS_ID_ENUM)} (1-3); approvedMaterialCategories only from ${JSON.stringify(confirmedCategories)}; list real hazards to keep away in forbiddenMaterialCategories; calm, supervised, no mouthing risks, appropriate for the weather tags ${JSON.stringify(weatherTags)} and an ${context.setting} setting. No URLs, code, brand names, or real names. Confirmed objects: ${objectLabels}. Context: ${JSON.stringify(context)}`,
           }],
           GENERATION_TIMEOUT_MS,
+          options.reasoningEffort ?? "low",
         );
         // Structural parse here; resolveExperience re-validates against the
         // parent-approved context (materials subset, focus catalogue).
@@ -510,6 +515,7 @@ export function createOpenAIExperienceProvider(
           text: `Author one short, safe, grown-up-led activity for a ${context.ageStage} child, tailored to these parent-confirmed everyday objects and context. Refer to the objects by their labels in the steps. Rules: experienceMode "guided_quest"; ageStage "${context.ageStage}"; 2-6 steps, each minute within 0..${context.availableMinutes}; choose developmentalFocusIds only from ${JSON.stringify(DEVELOPMENTAL_FOCUS_ID_ENUM)}; use materials only from ${JSON.stringify(confirmedCategories)}; choose exactly one tool from sort, measure, predict, sound_mix, or field_journal; keep it ${context.setting}, calm, non-recording, and appropriate for the weather tags ${JSON.stringify(weatherTags)}${context.ageStage === "4-6y" ? "; pitch the challenge for a 5-6 year old: predicting, testing, comparing, and explaining" : ""}. activitySummary is one short parent-facing sentence describing the activity. No URLs, code, brand names, or real names. Confirmed objects: ${objectLabels}. Context: ${JSON.stringify(context)}`,
         }],
         GENERATION_TIMEOUT_MS,
+        options.reasoningEffort ?? "low",
       );
       // Structural parse here; resolveExperience re-validates against the
       // parent-approved context (materials subset, focus catalogue, time window).

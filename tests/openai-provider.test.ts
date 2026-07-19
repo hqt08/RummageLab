@@ -76,6 +76,7 @@ describe("OpenAI server-only experience provider", () => {
     const body = JSON.parse(String(init.body));
     expect(body.model).toBe("gpt-5.6");
     expect(body.store).toBe(false);
+    expect(body.reasoning).toBeUndefined();
     expect(body.text.format).toMatchObject({ type: "json_schema", strict: true });
     expect(body.input[0].content[1]).toEqual({
       type: "input_image",
@@ -115,6 +116,7 @@ describe("OpenAI server-only experience provider", () => {
     const body = JSON.parse(String((fetchImpl as unknown as ReturnType<typeof vi.fn>).mock.calls[0]?.[1]?.body));
     expect(body.text.format.name).toBe("typed_object_inventory");
     expect(body.store).toBe(false);
+    expect(body.reasoning).toBeUndefined();
     expect(JSON.stringify(body)).toContain("duck");
   });
 
@@ -173,7 +175,27 @@ describe("OpenAI server-only experience provider", () => {
     const body = JSON.parse(String((fetchImpl as unknown as ReturnType<typeof vi.fn>).mock.calls[0]?.[1]?.body));
     expect(body.text.format.name).toBe("generated_activity");
     expect(body.store).toBe(false);
+    expect(body.reasoning).toEqual({ effort: "low" });
     expect(JSON.stringify(body)).toContain("soccer ball");
+  });
+
+  it("uses an owner-configured reasoning effort for live activity authoring", async () => {
+    const liveContext = createApprovedActivityContext({
+      materialSource: "photo",
+      confirmedMaterials: [{ allowedMaterialCategory: "large_soft_ball", label: "ball" }],
+      approvedWeatherTags: ["rainy"],
+      parentConfirmedSafety: true,
+    });
+    const fetchImpl = vi.fn(async () => responseFor(validGeneratedQuest)) as unknown as typeof fetch;
+    const configured = createOpenAIExperienceProvider({
+      apiKey: "development-key",
+      reasoningEffort: "medium",
+      transientImage: { mimeType: "image/jpeg", base64: "sanitized-pixels" },
+      fetchImpl,
+    });
+    await configured.selectExperience({ activityContext: liveContext });
+    const body = JSON.parse(String((fetchImpl as unknown as ReturnType<typeof vi.fn>).mock.calls[0]?.[1]?.body));
+    expect(body.reasoning).toEqual({ effort: "medium" });
   });
 
   it("rejects a generated activity that is not a valid quest", async () => {
