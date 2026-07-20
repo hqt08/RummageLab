@@ -2,7 +2,7 @@
 
 > Turn the things around you into moments of discovery for ages 0–6.
 
-**Status:** Deterministic seeded demo plus an optional, default-off live GPT-5.6 path that vets any parent-approved object and authors an age-, weather-, and object-appropriate activity · **Track:** Education
+**Status:** Deterministic seeded demo plus an optional live GPT-5.6 path (default-off in code; currently enabled on the public demo for judging) that vets any parent-approved object and authors an age-, weather-, and object-appropriate activity · **Track:** Education
 
 RummageLab helps a parent turn a few ordinary objects and a child’s curiosity
 into a developmentally appropriate moment of discovery. Every activity ends with
@@ -159,7 +159,7 @@ scope; even then, the learner app will never execute arbitrary generated code.
 | Concern | Choice | Why |
 | --- | --- | --- |
 | Product surface | Next.js, React, TypeScript | Fast public deployment, phone-friendly, easy judge access |
-| Source and hosting | Public [GitHub repository](https://github.com/hqt08/RummageLab) + [Vercel demo](https://rummage-lab.vercel.app/) | Reviewable source and a stable seeded production URL |
+| Source and hosting | Public [GitHub repository](https://github.com/hqt08/RummageLab) + [Vercel demo](https://rummage-lab.vercel.app/) | Reviewable source and a stable production URL; the seeded golden path always works, with live GPT-5.6 enabled during judging |
 | Model contracts | GPT-5.6 + Zod structured schemas | Consistent, inspectable, parent-safe rendering boundaries |
 | Reflection MVP | Optional typed parent note or Skip; voice deferred | Deterministic screening, strict structured output, explicit tag approval |
 | Data | Seeded, no-login parent context; preferences later | Keeps the demo reliable without sensitive child data |

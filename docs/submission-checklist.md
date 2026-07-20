@@ -18,8 +18,9 @@
   Optional live photo analysis and typed parent-reflection extraction use
   GPT-5.6 through server-only, stateless requests with `store: false` and only
   when the host has both an `OPENAI_API_KEY` and
-  `RUMMAGELAB_LIVE_OPENAI_ENABLED=true`. The key and switch must never be
-  committed, exposed to the browser, included in logs, or shared with judges.
+  `RUMMAGELAB_LIVE_OPENAI_ENABLED=true`. The key and switch values must never
+  be committed, exposed to the browser, included in logs, or shared with
+  judges; naming the switch in submission notes is fine.
   With the switch off, uploads and model work fail closed while the seeded demo
   remains complete.
 - **Video capture sequence:** promise (0:00–0:15), parent context and
