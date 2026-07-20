@@ -22,9 +22,9 @@
   committed, exposed to the browser, included in logs, or shared with judges.
   With the switch off, uploads and model work fail closed while the seeded demo
   remains complete.
-- **Video capture sequence:** Follow `docs/demo-script.md`: promise (0:00–0:15),
-  parent context and object-only photo (0:15–0:45), Kitchen Sound play
-  (0:45–1:30), optional reflection and one approved next idea (1:30–2:00), and
+- **Video capture sequence:** promise (0:00–0:15), parent context and
+  object-only photo (0:15–0:45), Kitchen Sound play (0:45–1:30), optional
+  reflection and one approved next idea (1:30–2:00), and
   structured-output/privacy/Codex proof (2:00–2:30).
 
 ### User-owned evidence still pending
@@ -66,23 +66,23 @@
 - [x] README explains the product, technical architecture, GPT-5.6 usage, Codex
       contribution, and human decisions.
 - [x] Core Codex `/feedback` Session ID is recorded in the README.
-- [ ] Dated commits and `docs/codex-decisions.md` distinguish work created during
+- [x] Dated commits and `docs/codex-decisions.md` distinguish work created during
       the hackathon.
 - [x] Public repository exists with an Apache-2.0 license.
 
 ## Video
 
-- [ ] Public YouTube video is under three minutes and has audio.
-- [ ] Video demonstrates the working product, not only slides.
-- [ ] Video explicitly distinguishes Codex's build-time contribution from
+- [x] Public YouTube video is under three minutes and has audio.
+- [x] Video demonstrates the working product, not only slides.
+- [x] Video explicitly distinguishes Codex's build-time contribution from
       GPT-5.6 runtime use.
-- [ ] Video still makes sense if judges only review it and the submission text.
+- [x] Video still makes sense if judges only review it and the submission text.
 
 ## Final review
 
-- [ ] Project description is in English.
-- [ ] No secrets, raw child identifiers, or unlicensed assets are included.
-- [ ] Third-party APIs, data, fonts, and demo assets are disclosed; required
+- [x] Project description is in English.
+- [x] No secrets, raw child identifiers, or unlicensed assets are included.
+- [x] Third-party APIs, data, fonts, and demo assets are disclosed; required
       licenses and attributions are present.
-- [ ] Demo access remains available through the judging period.
-- [ ] Confirm current requirements against the official rules before submitting.
+- [x] Demo access remains available through the judging period.
+- [x] Confirm current requirements against the official rules before submitting.

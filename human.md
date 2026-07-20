@@ -111,7 +111,7 @@ unchecked item rather than silently assuming an answer.
       and replace the `TBD` core Session ID in `README.md` and
       `docs/codex-decisions.md`. Never invent or reuse an unrelated ID.
 - [ ] **Finish submission-owned evidence:** Capture the under-three-minute
-      English demo video with audio using `docs/demo-script.md`, then provide the
+      English demo video with audio, then provide the
       public video URL and confirm the English project description, API/key
       disclosure, public source URL, and judging-period availability against the
       official submission form.

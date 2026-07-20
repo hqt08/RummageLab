@@ -265,8 +265,6 @@ memory.
 - [Early-learning focus catalogue](docs/learning-focuses-catalog.md)
 - [Privacy and safety boundaries](docs/privacy-safety.md)
 - [Parent observations and adaptive suggestions](docs/observation-model.md)
-- [Demo script](docs/demo-script.md)
-- [Photo-to-activity demo flow](docs/photo-to-activity-demo.md)
 - [Material-intake QA record](docs/material-intake-qa.md)
 - [Activity-context contract](docs/activity-context.md)
 - [Codex decision log](docs/codex-decisions.md)
