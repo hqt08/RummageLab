@@ -23,7 +23,6 @@ import {
   type KitchenSoundDemoPhase,
 } from "../lib/demo/demo-state";
 import {
-  KITCHEN_SOUND_DEMO_LOCATION_LABEL,
   KITCHEN_SOUND_AVAILABLE_WEATHER_TAGS,
   KITCHEN_SOUND_REQUIRED_MATERIALS,
   kitchenSoundQuest,
@@ -41,6 +40,8 @@ import {
 } from "../lib/demo/approved-quest-templates";
 import { findLearningFocus } from "../lib/data/learning-focuses";
 import { isUnderThreeCategory } from "../lib/demo/age-band-fallbacks";
+import { DEFAULT_DEMO_CITY_LABEL, demoCities, findDemoCity } from "../lib/demo/demo-cities";
+import { fetchLiveWeatherTags } from "../lib/demo/weather-lookup";
 import {
   LOCAL_OBJECT_PHOTO_DECODE_MAX_BYTES,
   LOCAL_OBJECT_PHOTO_DECODE_MAX_DIMENSION,
@@ -200,8 +201,12 @@ export function KitchenSoundDemo() {
     createInitialKitchenSoundDemoState(),
   );
   const [demoCityLabel, setDemoCityLabel] = useState<string>(
-    KITCHEN_SOUND_DEMO_LOCATION_LABEL,
+    DEFAULT_DEMO_CITY_LABEL,
   );
+  const [weatherLookupStatus, setWeatherLookupStatus] = useState<
+    "idle" | "loading" | "done" | "error"
+  >("idle");
+  const [weatherLookupMessage, setWeatherLookupMessage] = useState<string | null>(null);
   const [soundTrail, setSoundTrail] = useState<string[]>([]);
   const [predictionChoice, setPredictionChoice] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState("");
@@ -299,7 +304,9 @@ export function KitchenSoundDemo() {
     photoPreviewUrlRef.current = null;
     shouldFocusStageRef.current = true;
     dispatch({ type: "RESET" });
-    setDemoCityLabel(KITCHEN_SOUND_DEMO_LOCATION_LABEL);
+    setDemoCityLabel(DEFAULT_DEMO_CITY_LABEL);
+    setWeatherLookupStatus("idle");
+    setWeatherLookupMessage(null);
     setSoundTrail([]);
     setTypedMaterialText("");
     setPhotoPreviewUrl(null);
@@ -376,6 +383,25 @@ export function KitchenSoundDemo() {
     if (photoInputRef.current) photoInputRef.current.value = "";
     transitionDemo({ type: "SET_AGE_STAGE", ageStage });
     setAnnouncement(`${findDemoAgeStageOption(ageStage).label} selected.`);
+  }
+
+  async function suggestWeatherTags() {
+    const city = findDemoCity(demoCityLabel);
+    if (!city || state.phase !== "kit_review") return;
+    setWeatherLookupStatus("loading");
+    setWeatherLookupMessage(null);
+    try {
+      const suggestion = await fetchLiveWeatherTags(city);
+      dispatch({ type: "SET_WEATHER_TAGS", tags: suggestion.tags, source: "weather_lookup" });
+      setWeatherLookupStatus("done");
+      setWeatherLookupMessage(
+        `Live weather for ${city.label}: ${suggestion.conditionSummary}. Suggested tags are selected below — approve or adjust them yourself.`,
+      );
+      setAnnouncement("Live weather tags suggested. Review and approve the final set.");
+    } catch {
+      setWeatherLookupStatus("error");
+      setWeatherLookupMessage("The live weather lookup was unavailable. Choose tags manually.");
+    }
   }
 
   function updateTypedMaterials(value: string) {
@@ -646,6 +672,7 @@ export function KitchenSoundDemo() {
           label: object.label,
         })),
         approvedWeatherTags: state.selectedWeatherTags,
+        weatherSource: state.weatherSource,
         parentConfirmedSafety: state.parentConfirmedSafety,
       });
       runtimeRequestVersionRef.current += 1;
@@ -669,6 +696,7 @@ export function KitchenSoundDemo() {
         label: object.label,
       })),
       approvedWeatherTags: state.selectedWeatherTags,
+      weatherSource: state.weatherSource,
       parentConfirmedSafety: state.parentConfirmedSafety,
     });
     try {
@@ -713,6 +741,7 @@ export function KitchenSoundDemo() {
         label: object.label,
       })),
       approvedWeatherTags: state.selectedWeatherTags,
+      weatherSource: state.weatherSource,
       parentConfirmedSafety: state.parentConfirmedSafety,
     });
     const quest = deterministicApprovedQuestForContext(activityContext);
@@ -1286,25 +1315,57 @@ export function KitchenSoundDemo() {
                     <div className="city-card">
                       <label className="city-field">
                         <span className="city-label">
-                          Public demo city label
+                          Public demo city
                         </span>
-                        <input
+                        <select
                           aria-describedby="demo-city-boundary"
-                          autoComplete="off"
                           className="city-input"
-                          maxLength={60}
-                          onChange={(event) =>
-                            setDemoCityLabel(event.currentTarget.value)
-                          }
-                          type="text"
+                          onChange={(event) => {
+                            setDemoCityLabel(event.currentTarget.value);
+                            setWeatherLookupStatus("idle");
+                            setWeatherLookupMessage(null);
+                          }}
                           value={demoCityLabel}
-                        />
+                        >
+                          {demoCities.map((city) => (
+                            <option key={city.label} value={city.label}>
+                              {city.label}
+                            </option>
+                          ))}
+                        </select>
                       </label>
                       <p className="city-note" id="demo-city-boundary">
-                        Editable display only—not your location. Use a public
-                        city, not an address. This text never enters the activity
-                        context, triggers a lookup, or leaves React memory.
+                        A curated public city—not your location. Only the
+                        approved tags below enter the activity context. The
+                        optional lookup sends this public city&apos;s fixed
+                        coordinates directly to Open-Meteo (no key, no account)
+                        and maps the conditions to tags on this device.
                       </p>
+                      <div className="button-row">
+                        <button
+                          className="secondary-button"
+                          disabled={weatherLookupStatus === "loading"}
+                          onClick={() => void suggestWeatherTags()}
+                          type="button"
+                        >
+                          {weatherLookupStatus === "loading" ? (
+                            <>
+                              <span className="loading-spinner loading-spinner--inline" aria-hidden="true" />
+                              Checking city weather…
+                            </>
+                          ) : (
+                            "Suggest tags from city weather"
+                          )}
+                        </button>
+                      </div>
+                      {weatherLookupMessage ? (
+                        <p
+                          className={weatherLookupStatus === "error" ? "input-error" : "privacy-note"}
+                          role={weatherLookupStatus === "error" ? "alert" : "status"}
+                        >
+                          {weatherLookupMessage}
+                        </p>
+                      ) : null}
                     </div>
 
                     <div className="chip-row">

@@ -59,8 +59,9 @@ describe("KitchenSoundDemo", () => {
     expect(html).toContain('type="radio"');
     expect(html).toContain("Object-only demo photo");
     expect(html).toContain("Anchorage, Alaska");
-    expect(html).toContain("Public demo city label");
-    expect(html).toContain('type="text"');
+    expect(html).toContain("Public demo city");
+    expect(html).toContain("Seattle, Washington");
+    expect(html).toContain("Suggest tags from city weather");
     expect(html).toContain('href="#demo-content"');
     expect(html).toContain('id="demo-content" tabindex="-1"');
     expect(html).toContain("Approve these demo weather tags");
