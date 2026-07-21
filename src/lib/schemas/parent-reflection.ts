@@ -21,6 +21,14 @@ export const ObservationTagSchema = z.enum([
   "cause_and_effect",
   "movement_play",
   "texture_exploration",
+  // Activity-neutral tags so feedback after generated (non-sound) activities
+  // does not have to shoehorn into the Kitchen-Sound-era vocabulary.
+  "stacking_building",
+  "hiding_finding",
+  "counting_play",
+  "pretend_play",
+  "balancing",
+  "watching_waiting",
 ]);
 
 /**

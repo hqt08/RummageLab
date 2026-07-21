@@ -62,6 +62,7 @@ import {
   type MaterialIntakeSource,
   type VettedCandidate,
 } from "../lib/demo/material-intake";
+import { ObservationTagSchema } from "../lib/schemas";
 import type { AllowedMaterialCategory, ExperienceSpec, PhotoInventory } from "../lib/schemas";
 import {
   ExperienceResponseSchema,
@@ -135,6 +136,12 @@ const observationTagLabels: Record<DemoObservationTag, string> = {
   cause_and_effect: "Cause and effect",
   movement_play: "Movement play",
   texture_exploration: "Texture exploration",
+  stacking_building: "Stacking & building",
+  hiding_finding: "Hiding & finding",
+  counting_play: "Counting play",
+  pretend_play: "Pretend play",
+  balancing: "Balancing",
+  watching_waiting: "Watching & waiting",
 };
 
 const phaseProgress: Record<KitchenSoundDemoPhase, string> = {
@@ -955,16 +962,8 @@ export function KitchenSoundDemo() {
       ].filter(Boolean)
     : [];
 
-  const availableObservationTags = [
-    "sound_play",
-    "loud_quiet_contrast",
-    "two_beat_pattern",
-    "turn_taking",
-    "descriptive_words",
-    "cause_and_effect",
-    "movement_play",
-    "texture_exploration",
-  ] as const satisfies readonly DemoObservationTag[];
+  const availableObservationTags: readonly DemoObservationTag[] =
+    ObservationTagSchema.options;
 
   return (
     <div className="demo-shell">

@@ -16,6 +16,12 @@ const interestPhrases: Partial<Record<DemoObservationTag, string>> = {
   cause_and_effect: "one tiny change to test and watch",
   movement_play: "one slow, gentle movement to repeat",
   texture_exploration: "one texture to touch and name",
+  stacking_building: "one small tower to stack and gently topple",
+  hiding_finding: "one hide-and-reveal peek to play",
+  counting_play: "one tiny count-together moment",
+  pretend_play: "one little pretend scene to act out",
+  balancing: "one gentle balance to try and hold",
+  watching_waiting: "one slow watch-and-wait pause",
 };
 
 /**

@@ -125,3 +125,46 @@ describe("applying a live idea in state", () => {
     })).toBe(initial);
   });
 });
+
+describe("observation tag vocabulary", () => {
+  it("includes the activity-neutral tags and keeps the fallback phrases in sync", async () => {
+    const { ObservationTagSchema } = await import("../src/lib/schemas");
+    for (const tag of ["stacking_building", "hiding_finding", "counting_play", "pretend_play", "balancing", "watching_waiting"]) {
+      expect(ObservationTagSchema.options).toContain(tag);
+    }
+    // Every tag yields a usable local fallback idea.
+    for (const tag of ObservationTagSchema.options) {
+      const idea = createGenericNextIdea({
+        interestTags: [tag],
+        supportTags: [],
+        objectLabels: ["soft ball"],
+      });
+      expect(idea.invitation.length).toBeGreaterThan(10);
+    }
+  });
+
+  it("derives the reflection provider tag enum from the Zod source of truth", async () => {
+    const { ObservationTagSchema } = await import("../src/lib/schemas");
+    const idea = {
+      title: "Stack and Find",
+      durationMinutes: 5,
+      invitation: "Stack two cups, hide the duck under one, and find it together.",
+      connection: "Builds on stacking and hiding-finding interest.",
+    };
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({
+      output: [{ content: [{ type: "output_text", text: JSON.stringify(idea) }] }],
+    }), { status: 200 })) as unknown as typeof fetch;
+    await suggestNextActivityLive(
+      { ...validRequest, approvedInterestTags: ["stacking_building"], approvedSupportTags: ["watching_waiting"] },
+      { apiKey: "development-key", fetchImpl },
+    );
+    // The reflection extraction schema is exercised in its own test file; here we
+    // assert the request accepted the new tags end-to-end via the contract.
+    expect(NextSuggestionRequestSchema.safeParse({
+      ...validRequest,
+      approvedInterestTags: ["pretend_play", "counting_play"],
+      approvedSupportTags: ["balancing"],
+    }).success).toBe(true);
+    expect(ObservationTagSchema.options.length).toBe(14);
+  });
+});
