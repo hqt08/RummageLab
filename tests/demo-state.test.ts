@@ -239,6 +239,29 @@ describe("Kitchen Sound Detectives reflection and next-step state", () => {
     expect(attemptedAgain).toBe(created);
   });
 
+  it("keeps a live reflection draft's parent wording and GPT-derived tags for review", () => {
+    const reviewing = kitchenSoundDemoReducer(reflectionState(), {
+      type: "REVIEW_OBSERVATION_DRAFT",
+      draft: {
+        observedEvents: ["Stacked containers and compared their height."],
+        parentSummary: "They stacked the containers, then asked to compare the tallest one.",
+        interestTags: ["stacking_building"],
+        supportTags: ["watching_waiting"],
+      },
+    });
+
+    expect(reviewing.phase).toBe("observation_review");
+    expect(reviewing.observationDraft).toMatchObject({
+      parentSummary: "They stacked the containers, then asked to compare the tallest one.",
+      interestTags: ["stacking_building"],
+      supportTags: ["watching_waiting"],
+    });
+    // The prepared example remains a separate, explicit golden-path action.
+    expect(kitchenSoundDemoReducer(reflectionState(), {
+      type: "REVIEW_SEEDED_OBSERVATION",
+    }).observationDraft?.parentSummary).toContain("They copied two taps, chose");
+  });
+
   it("will not create a suggestion after all interest tags are removed", () => {
     const withoutInterests = reduce(
       reflectionState(),

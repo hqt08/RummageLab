@@ -23,9 +23,21 @@ describe("OpenAI reflection provider", () => {
     const fetchImpl = vi.fn(async () => responseFor(validDraft)) as unknown as typeof fetch;
     await expect(createOpenAIReflectionProvider({ apiKey: "test-key", fetchImpl }).suggest(request)).resolves.toEqual(validDraft);
     const body = JSON.parse(String((fetchImpl as unknown as ReturnType<typeof vi.fn>).mock.calls[0][1].body));
-    expect(body).toMatchObject({ model: "gpt-5.6", store: false });
+    expect(body).toMatchObject({ model: "gpt-5.6", store: false, reasoning: { effort: "low" } });
     expect(body.text.format).toMatchObject({ type: "json_schema", strict: true });
     expect(JSON.stringify(body)).not.toContain("parent_approved");
+  });
+
+  it("uses the configured model and reasoning effort for live reflection", async () => {
+    const fetchImpl = vi.fn(async () => responseFor(validDraft)) as unknown as typeof fetch;
+    await createOpenAIReflectionProvider({
+      apiKey: "test-key",
+      model: "gpt-5.6-mini",
+      reasoningEffort: "medium",
+      fetchImpl,
+    }).suggest(request);
+    const body = JSON.parse(String((fetchImpl as unknown as ReturnType<typeof vi.fn>).mock.calls[0][1].body));
+    expect(body).toMatchObject({ model: "gpt-5.6-mini", reasoning: { effort: "medium" } });
   });
 
   it("encodes delimiter-like instructions as JSON data", async () => {

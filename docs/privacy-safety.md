@@ -15,7 +15,10 @@ review before a real launch.
 - Typed notes are free-form and may contain accidental PII. The implemented
   slice warns the parent and conservatively blocks likely sensitive details with
   the same deterministic guard in the browser and server before any model call.
-  It never logs the text and discards it after the transient request. The guard
+  It never logs the text. After the one-time extraction request, the guarded
+  note stays only in React memory for the immediate parent-review field and is
+  cleared on skip, reset, or reload; it is never returned by the server or
+  placed in a `NextActivityContext`. The guard
   is defense in depth and is not described as perfect automated PII detection.
 - A voice memo is an explicit, opt-in **adult-only** recording. Unless
   transcription runs locally, raw parent audio necessarily reaches the

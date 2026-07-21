@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
   canSendPhotoForLiveAnalysis,
   KitchenSoundDemo,
+  parentReviewDraftFromTypedReflection,
   photoAnalysisResult,
 } from "../src/components/kitchen-sound-demo";
 import { kitchenSoundPhotoInventory } from "../src/lib/demo/kitchen-sound-detectives";
@@ -35,6 +36,25 @@ describe("KitchenSoundDemo", () => {
       inventory: null,
       source: null,
       candidates: [],
+    });
+  });
+
+  it("keeps a guarded typed note in the immediate parent review while using GPT-derived tags", () => {
+    const draft = parentReviewDraftFromTypedReflection("They stacked the containers and asked to try again.", {
+      source: "parent_reported",
+      observedEvents: ["Stacked containers and returned to the activity."],
+      parentSummary: "They explored stacking with the containers.",
+      suggestedInterestTags: ["stacking_building"],
+      suggestedSupportTags: ["watching_waiting"],
+      ephemeralOnly: true,
+      requiresParentReview: true,
+      notAnAssessment: true,
+    });
+    expect(draft).toEqual({
+      observedEvents: ["Stacked containers and returned to the activity."],
+      parentSummary: "They stacked the containers and asked to try again.",
+      interestTags: ["stacking_building"],
+      supportTags: ["watching_waiting"],
     });
   });
 

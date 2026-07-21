@@ -114,6 +114,8 @@ export async function POST(request: Request) {
       try {
         const suggestion = await suggestNextActivityLive(body, {
           apiKey: capability.apiKey,
+          model: capability.model,
+          reasoningEffort: capability.reasoningEffort,
           signal: request.signal,
         });
         return NextResponse.json(NextSuggestionResponseSchema.parse({
@@ -140,6 +142,8 @@ export async function POST(request: Request) {
     if (!decision.allowed) return rateLimitedResponse(decision.retryAfterSeconds);
     const response = await resolveReflection(body, createOpenAIReflectionProvider({
       apiKey: capability.apiKey,
+      model: capability.model,
+      reasoningEffort: capability.reasoningEffort,
       signal: request.signal,
     }));
     return NextResponse.json(response);

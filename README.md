@@ -197,8 +197,9 @@ RUMMAGELAB_OPENAI_REASONING_EFFORT=low
 ```
 
 The live slice defaults to `gpt-5.6`; set `RUMMAGELAB_OPENAI_MODEL` to point the
-Responses API at a faster or cheaper tier without a code change. Activity and
-under-three moment authoring use `low` reasoning by default; set
+Responses API at a faster or cheaper tier without a code change. Activity,
+under-three moment, typed-reflection, and live next-idea authoring use `low`
+reasoning by default; set
 `RUMMAGELAB_OPENAI_REASONING_EFFORT` to a supported GPT-5.6 value to tune that
 trade-off. Photo and typed-object inventory mapping do not receive this setting.
 Live mode runs only when

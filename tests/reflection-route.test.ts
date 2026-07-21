@@ -4,12 +4,15 @@ import { POST } from "../src/app/api/reflection/route";
 
 const originalKey = process.env.OPENAI_API_KEY;
 const originalLiveSwitch = process.env.RUMMAGELAB_LIVE_OPENAI_ENABLED;
+const originalReasoningEffort = process.env.RUMMAGELAB_OPENAI_REASONING_EFFORT;
 afterEach(() => {
   vi.restoreAllMocks();
   if (originalKey === undefined) delete process.env.OPENAI_API_KEY;
   else process.env.OPENAI_API_KEY = originalKey;
   if (originalLiveSwitch === undefined) delete process.env.RUMMAGELAB_LIVE_OPENAI_ENABLED;
   else process.env.RUMMAGELAB_LIVE_OPENAI_ENABLED = originalLiveSwitch;
+  if (originalReasoningEffort === undefined) delete process.env.RUMMAGELAB_OPENAI_REASONING_EFFORT;
+  else process.env.RUMMAGELAB_OPENAI_REASONING_EFFORT = originalReasoningEffort;
 });
 
 function requestFor(text: string, extra: Record<string, unknown> = {}) {
@@ -51,6 +54,36 @@ describe("typed reflection route", () => {
       diagnostic: { code: "provider_disabled", retryable: false },
     });
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("returns a distinct live review draft and GPT-derived tags for a safe typed note", async () => {
+    process.env.OPENAI_API_KEY = "test-key";
+    process.env.RUMMAGELAB_LIVE_OPENAI_ENABLED = "true";
+    process.env.RUMMAGELAB_OPENAI_REASONING_EFFORT = "low";
+    const typedNote = "They stacked the containers, then asked to compare the tallest one.";
+    const liveDraft = {
+      source: "parent_reported",
+      observedEvents: ["Stacked containers and compared their height."],
+      parentSummary: "They explored stacking and comparing containers.",
+      suggestedInterestTags: ["stacking_building"],
+      suggestedSupportTags: ["watching_waiting"],
+      ephemeralOnly: true,
+      requiresParentReview: true,
+      notAnAssessment: true,
+    };
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({
+      output: [{ content: [{ type: "output_text", text: JSON.stringify(liveDraft) }] }],
+    }), { status: 200 }));
+
+    const response = await POST(requestFor(typedNote));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      suggestion: liveDraft,
+      runtime: { source: "live_provider" },
+    });
+    const body = JSON.parse(String(fetchSpy.mock.calls[0]?.[1]?.body));
+    expect(body.reasoning).toEqual({ effort: "low" });
+    expect(body.input[0].content[0].text).toContain(JSON.stringify(typedNote));
   });
 
   it.each(["parent@example.com", "Call 907-555-0199", "My child's name is Rowan"])("blocks PII risk before fetch: %s", async (text) => {

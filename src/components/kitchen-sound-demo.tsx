@@ -70,7 +70,11 @@ import {
   PhotoInventoryResponseSchema,
 } from "../lib/runtime/contracts";
 import type { PhotoInventoryResponse } from "../lib/runtime/contracts";
-import { NextSuggestionResponseSchema, ReflectionResponseSchema } from "../lib/runtime/reflection-contracts";
+import {
+  NextSuggestionResponseSchema,
+  ReflectionResponseSchema,
+  type ReflectionSuggestionDraft,
+} from "../lib/runtime/reflection-contracts";
 import { guardTypedReflection } from "../lib/runtime/reflection-guard";
 import { ReflectionRequestLifecycle } from "../lib/runtime/reflection-request-lifecycle";
 
@@ -97,6 +101,23 @@ const materialNames: Record<AllowedMaterialCategory, string> = {
   large_natural_object: "large natural object",
   other_safe_object: "everyday object",
 };
+
+/**
+ * The server never returns raw parent text. After one guarded request, keep
+ * that text only in this React session for the immediate parent-review field;
+ * GPT-derived observed events and tags remain the adaptive inputs.
+ */
+export function parentReviewDraftFromTypedReflection(
+  typedNote: string,
+  suggestion: ReflectionSuggestionDraft,
+) {
+  return {
+    observedEvents: [...suggestion.observedEvents],
+    parentSummary: typedNote,
+    interestTags: [...suggestion.suggestedInterestTags],
+    supportTags: [...suggestion.suggestedSupportTags],
+  };
+}
 
 const intakeChoiceCopy: Record<
   MaterialIntakeSource,
@@ -882,12 +903,7 @@ export function KitchenSoundDemo() {
       );
       transitionDemo({
         type: "REVIEW_OBSERVATION_DRAFT",
-        draft: {
-          observedEvents: payload.suggestion.observedEvents,
-          parentSummary: payload.suggestion.parentSummary,
-          interestTags: payload.suggestion.suggestedInterestTags,
-          supportTags: payload.suggestion.suggestedSupportTags,
-        },
+        draft: parentReviewDraftFromTypedReflection(guarded.text, payload.suggestion),
       });
     } catch {
       if (!reflectionRequestRef.current.isCurrent(request.version) || request.signal.aborted) return;
@@ -1806,7 +1822,7 @@ export function KitchenSoundDemo() {
           <section className="stage" data-phase="observation-review">
             <StageHeader
               deck={activeQuest.id === KITCHEN_SOUND_DEMO_ID
-                ? "Edit the prepared wording, then choose the small tag set you approve. The note itself can never shape the next idea."
+                ? "Review this wording, then choose the small tag set you approve. The note itself can never shape the next idea."
                 : "Edit your note, then choose the small tag set you approve. Your reviewed note and approved tags shape one live idea."}
               eyebrow={phaseProgress[state.phase]}
               headingRef={stageHeadingRef}
@@ -1837,8 +1853,9 @@ export function KitchenSoundDemo() {
                   />
                 </label>
                 <p className="privacy-note" id="summary-boundary">
-                  Keep private details out. The raw typed note has already been
-                  discarded and is never used to make the next suggestion.
+                  Keep private details out. This wording stays only in this
+                  session until reset or reload. For Kitchen Sound Detectives,
+                  only the tags you approve can shape the next idea.
                 </p>
               </article>
 
