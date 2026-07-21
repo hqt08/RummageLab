@@ -238,6 +238,7 @@ export function KitchenSoundDemo() {
   >("idle");
   const [weatherLookupMessage, setWeatherLookupMessage] = useState<string | null>(null);
   const [nextIdeaStatus, setNextIdeaStatus] = useState<"idle" | "loading">("idle");
+  const [nextCycleStatus, setNextCycleStatus] = useState<"idle" | "loading">("idle");
   const [soundTrail, setSoundTrail] = useState<string[]>([]);
   const [predictionChoice, setPredictionChoice] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState("");
@@ -339,6 +340,7 @@ export function KitchenSoundDemo() {
     setWeatherLookupStatus("idle");
     setWeatherLookupMessage(null);
     setNextIdeaStatus("idle");
+    setNextCycleStatus("idle");
     setSoundTrail([]);
     setTypedMaterialText("");
     setPhotoPreviewUrl(null);
@@ -415,6 +417,75 @@ export function KitchenSoundDemo() {
     if (photoInputRef.current) photoInputRef.current.value = "";
     transitionDemo({ type: "SET_AGE_STAGE", ageStage });
     setAnnouncement(`${findDemoAgeStageOption(ageStage).label} selected.`);
+  }
+
+  async function tryIdeaNow() {
+    const suggestion = state.nextSuggestion;
+    if (!suggestion || nextCycleStatus === "loading") return;
+    let activityContext;
+    try {
+      activityContext = createApprovedActivityContext({
+        ageStage: state.selectedAgeStage,
+        materialSource: state.materialSource,
+        confirmedMaterials: state.confirmedObjects.map((object) => ({
+          allowedMaterialCategory: object.category,
+          label: object.label,
+        })),
+        approvedWeatherTags: state.selectedWeatherTags,
+        weatherSource: state.weatherSource,
+        parentConfirmedSafety: state.parentConfirmedSafety,
+      });
+    } catch {
+      return;
+    }
+    const startCycle = (experience: ExperienceSpec, source: "live_provider" | "seeded_fallback") => {
+      setActiveQuest(experience);
+      setLiveSource(source);
+      setSoundTrail([]);
+      setPredictionChoice(null);
+      setTypedReflection("");
+      setReflectionStatus("idle");
+      setReflectionMessage(null);
+      setRuntimePreviewStatus("idle");
+      setAnnouncement(source === "live_provider"
+        ? "A new activity was generated live from your accepted idea."
+        : "The prepared fallback activity is ready for another round.");
+      transitionDemo({ type: "START_NEXT_CYCLE", experience });
+    };
+    setNextCycleStatus("loading");
+    try {
+      const response = await fetch("/api/live-experience", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          operation: "experience_selection",
+          fixtureId: "kitchen-sound-detectives",
+          activityContext,
+          guidance: {
+            ideaTitle: suggestion.title.slice(0, 80),
+            ideaInvitation: suggestion.invitation.slice(0, 240),
+            interestTags: suggestion.basedOnTags.interestTags,
+            supportTags: suggestion.basedOnTags.supportTags,
+          },
+        }),
+      });
+      const payload = ExperienceResponseSchema.parse(await response.json());
+      startCycle(
+        payload.experience,
+        payload.runtime.source === "live_provider" ? "live_provider" : "seeded_fallback",
+      );
+    } catch {
+      // Any failure (including rate limiting) falls back to the deterministic
+      // reviewed activity for the unchanged parent-approved context.
+      try {
+        const experience = deterministicApprovedQuestForContext(activityContext);
+        startCycle(experience, "seeded_fallback");
+      } catch {
+        setAnnouncement("The next activity could not be prepared. Reset to start over.");
+      }
+    } finally {
+      setNextCycleStatus("idle");
+    }
   }
 
   async function approveTagsForIdea() {
@@ -1968,14 +2039,38 @@ export function KitchenSoundDemo() {
               </div>
               <p className="boundary-note">
                 {state.nextSuggestion.origin === "live"
-                  ? "Authored live from the tags you approved and your reviewed note, plus the confirmed objects, age band, and approved weather tags. Nothing was stored, and there is no second suggestion in this session."
-                  : "Built only from the approved tags above. No note, photo, city, name, voice, score, or history was used. There is no second suggestion in this session."}
+                  ? "Authored live from the tags you approved and your reviewed note, plus the confirmed objects, age band, and approved weather tags. Nothing was stored — one suggestion per completed activity."
+                  : "Built only from the approved tags above. No note, photo, city, name, voice, score, or history was used — one suggestion per completed activity."}
               </p>
               <div className="button-row">
-                <button className="primary-button" onClick={resetDemo} type="button">
+                {livePhotoAnalysisAvailable ? (
+                  <button
+                    className="primary-button"
+                    disabled={nextCycleStatus === "loading"}
+                    onClick={() => void tryIdeaNow()}
+                    type="button"
+                  >
+                    {nextCycleStatus === "loading" ? (
+                      <>
+                        <span className="loading-spinner loading-spinner--inline" aria-hidden="true" />
+                        Making this activity…
+                      </>
+                    ) : (
+                      "Try this idea now"
+                    )}
+                  </button>
+                ) : null}
+                <button className="secondary-button" onClick={resetDemo} type="button">
                   Reset demo
                 </button>
               </div>
+              {livePhotoAnalysisAvailable ? (
+                <p className="privacy-note">
+                  Trying the idea generates a full activity live from this accepted
+                  idea and your unchanged confirmed objects, age band, and weather.
+                  Your other confirmations carry forward; nothing new is collected.
+                </p>
+              ) : null}
             </article>
           </section>
         ) : null}

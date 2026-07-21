@@ -4,6 +4,7 @@ import {
   ActivityContextSchema,
   AgeStageSchema,
   ExperienceSpecSchema,
+  ObservationTagSchema,
   PhotoInventorySchema,
 } from "../schemas";
 
@@ -37,9 +38,25 @@ export const PhotoInventoryRequestSchema = z.discriminatedUnion("mode", [
     .strict(),
 ]);
 
+/**
+ * A parent-accepted follow-up idea used as the brief for the next generated
+ * activity in the feedback loop. Everything in it passed a parent gate: the
+ * tags were explicitly approved, and the idea itself was accepted by tapping
+ * "Try this idea now". Raw reflection text never travels here.
+ */
+export const NextIdeaGuidanceSchema = z
+  .object({
+    ideaTitle: z.string().trim().min(1).max(80),
+    ideaInvitation: z.string().trim().min(1).max(240),
+    interestTags: z.array(ObservationTagSchema).min(1).max(3),
+    supportTags: z.array(ObservationTagSchema).max(2),
+  })
+  .strict();
+
 export const ExperienceRequestSchema = z
   .object({
     activityContext: ActivityContextSchema,
+    guidance: NextIdeaGuidanceSchema.optional(),
   })
   .strict();
 
@@ -103,6 +120,7 @@ export const ExperienceResponseSchema = z
 
 export type PhotoInventoryRequest = z.infer<typeof PhotoInventoryRequestSchema>;
 export type ExperienceRequest = z.infer<typeof ExperienceRequestSchema>;
+export type NextIdeaGuidance = z.infer<typeof NextIdeaGuidanceSchema>;
 export type RuntimeOperation = z.infer<typeof RuntimeOperationSchema>;
 export type RuntimeFailureCode = z.infer<typeof RuntimeFailureCodeSchema>;
 export type RuntimeDiagnostic = z.infer<typeof RuntimeDiagnosticSchema>;
