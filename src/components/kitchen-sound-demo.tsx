@@ -24,6 +24,7 @@ import {
 } from "../lib/demo/demo-state";
 import {
   KITCHEN_SOUND_AVAILABLE_WEATHER_TAGS,
+  KITCHEN_SOUND_DEMO_ID,
   KITCHEN_SOUND_REQUIRED_MATERIALS,
   kitchenSoundQuest,
   type DemoObservationTag,
@@ -42,6 +43,7 @@ import { findLearningFocus } from "../lib/data/learning-focuses";
 import { isUnderThreeCategory } from "../lib/demo/age-band-fallbacks";
 import { DEFAULT_DEMO_CITY_LABEL, demoCities, findDemoCity } from "../lib/demo/demo-cities";
 import { fetchLiveWeatherTags } from "../lib/demo/weather-lookup";
+import { createGenericNextIdea } from "../lib/demo/generic-next-suggestion";
 import {
   LOCAL_OBJECT_PHOTO_DECODE_MAX_BYTES,
   LOCAL_OBJECT_PHOTO_DECODE_MAX_DIMENSION,
@@ -67,7 +69,7 @@ import {
   PhotoInventoryResponseSchema,
 } from "../lib/runtime/contracts";
 import type { PhotoInventoryResponse } from "../lib/runtime/contracts";
-import { ReflectionResponseSchema } from "../lib/runtime/reflection-contracts";
+import { NextSuggestionResponseSchema, ReflectionResponseSchema } from "../lib/runtime/reflection-contracts";
 import { guardTypedReflection } from "../lib/runtime/reflection-guard";
 import { ReflectionRequestLifecycle } from "../lib/runtime/reflection-request-lifecycle";
 
@@ -207,6 +209,7 @@ export function KitchenSoundDemo() {
     "idle" | "loading" | "done" | "error"
   >("idle");
   const [weatherLookupMessage, setWeatherLookupMessage] = useState<string | null>(null);
+  const [nextIdeaStatus, setNextIdeaStatus] = useState<"idle" | "loading">("idle");
   const [soundTrail, setSoundTrail] = useState<string[]>([]);
   const [predictionChoice, setPredictionChoice] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState("");
@@ -307,6 +310,7 @@ export function KitchenSoundDemo() {
     setDemoCityLabel(DEFAULT_DEMO_CITY_LABEL);
     setWeatherLookupStatus("idle");
     setWeatherLookupMessage(null);
+    setNextIdeaStatus("idle");
     setSoundTrail([]);
     setTypedMaterialText("");
     setPhotoPreviewUrl(null);
@@ -383,6 +387,49 @@ export function KitchenSoundDemo() {
     if (photoInputRef.current) photoInputRef.current.value = "";
     transitionDemo({ type: "SET_AGE_STAGE", ageStage });
     setAnnouncement(`${findDemoAgeStageOption(ageStage).label} selected.`);
+  }
+
+  async function approveTagsForIdea() {
+    // Golden path: the Kitchen Sound quest keeps its deterministic, tag-only
+    // prepared suggestion.
+    if (activeQuest.id === KITCHEN_SOUND_DEMO_ID) {
+      transitionDemo({ type: "CREATE_NEXT_SUGGESTION" });
+      return;
+    }
+    const draft = state.observationDraft;
+    if (!draft || nextIdeaStatus === "loading") return;
+    setNextIdeaStatus("loading");
+    const fallbackIdea = createGenericNextIdea({
+      interestTags: draft.interestTags,
+      supportTags: draft.supportTags,
+      objectLabels: state.confirmedObjects.map((object) => object.label),
+    });
+    try {
+      const response = await fetch("/api/reflection", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          operation: "next_suggestion",
+          ageStage: state.selectedAgeStage,
+          weatherTags: state.selectedWeatherTags,
+          objectLabels: state.confirmedObjects.map((object) => object.label.slice(0, 60)),
+          previousActivityTitle: activeQuest.title,
+          approvedInterestTags: draft.interestTags,
+          approvedSupportTags: draft.supportTags,
+          parentSummary: draft.parentSummary,
+        }),
+      });
+      const payload = NextSuggestionResponseSchema.parse(await response.json());
+      transitionDemo({
+        type: "APPLY_NEXT_SUGGESTION",
+        idea: payload.suggestion,
+        origin: payload.runtime.source === "live_provider" ? "live" : "fallback",
+      });
+    } catch {
+      transitionDemo({ type: "APPLY_NEXT_SUGGESTION", idea: fallbackIdea, origin: "fallback" });
+    } finally {
+      setNextIdeaStatus("idle");
+    }
   }
 
   async function suggestWeatherTags() {
@@ -1721,6 +1768,7 @@ export function KitchenSoundDemo() {
                 </div>
               </article>
 
+              {activeQuest.id === KITCHEN_SOUND_DEMO_ID ? (
               <article className="choice-card">
                 <p className="panel-kicker">Prepared example</p>
                 <h2 className="panel-title">Review a demo observation</h2>
@@ -1738,6 +1786,7 @@ export function KitchenSoundDemo() {
                   </button>
                 </div>
               </article>
+              ) : null}
             </div>
           </section>
         ) : null}
@@ -1745,7 +1794,9 @@ export function KitchenSoundDemo() {
         {state.phase === "observation_review" && state.observationDraft ? (
           <section className="stage" data-phase="observation-review">
             <StageHeader
-              deck="Edit the prepared wording, then choose the small tag set you approve. The note itself can never shape the next idea."
+              deck={activeQuest.id === KITCHEN_SOUND_DEMO_ID
+                ? "Edit the prepared wording, then choose the small tag set you approve. The note itself can never shape the next idea."
+                : "Edit your note, then choose the small tag set you approve. Your reviewed note and approved tags shape one live idea."}
               eyebrow={phaseProgress[state.phase]}
               headingRef={stageHeadingRef}
               title="What you noticed"
@@ -1839,13 +1890,18 @@ export function KitchenSoundDemo() {
                 <div className="button-row">
                   <button
                     className="primary-button"
-                    disabled={!canCreateNextSuggestion}
-                    onClick={() =>
-                      transitionDemo({ type: "CREATE_NEXT_SUGGESTION" })
-                    }
+                    disabled={!canCreateNextSuggestion || nextIdeaStatus === "loading"}
+                    onClick={() => void approveTagsForIdea()}
                     type="button"
                   >
-                    Approve these tags for one idea
+                    {nextIdeaStatus === "loading" ? (
+                      <>
+                        <span className="loading-spinner loading-spinner--inline" aria-hidden="true" />
+                        Making one idea…
+                      </>
+                    ) : (
+                      "Approve these tags for one idea"
+                    )}
                   </button>
                 </div>
               </article>
@@ -1863,7 +1919,11 @@ export function KitchenSoundDemo() {
             />
 
             <article className="final-card">
-              <div className="final-stamp">One-time idea · 5 minutes</div>
+              <div className="final-stamp">
+                {state.nextSuggestion.origin === "live"
+                  ? `One-time idea · generated live · ${state.nextSuggestion.durationMinutes} minutes`
+                  : `One-time idea · ${state.nextSuggestion.durationMinutes} minutes`}
+              </div>
               <h2 className="panel-title">{state.nextSuggestion.title}</h2>
               <p className="panel-copy">{state.nextSuggestion.invitation}</p>
               <p className="panel-copy">
@@ -1879,9 +1939,9 @@ export function KitchenSoundDemo() {
                 ))}
               </div>
               <p className="boundary-note">
-                Built only from the approved tags above. No note, photo, city,
-                name, voice, score, or history was used. There is no second
-                suggestion in this session.
+                {state.nextSuggestion.origin === "live"
+                  ? "Authored live from the tags you approved and your reviewed note, plus the confirmed objects, age band, and approved weather tags. Nothing was stored, and there is no second suggestion in this session."
+                  : "Built only from the approved tags above. No note, photo, city, name, voice, score, or history was used. There is no second suggestion in this session."}
               </p>
               <div className="button-row">
                 <button className="primary-button" onClick={resetDemo} type="button">

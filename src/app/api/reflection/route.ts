@@ -1,11 +1,52 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { TypedReflectionRequestSchema } from "../../../lib/runtime/reflection-contracts";
+import {
+  NextSuggestionResponseSchema,
+  NextSuggestionRequestSchema,
+  TypedReflectionRequestSchema,
+  type NextSuggestionRequest,
+  type ReflectionFailureCode,
+} from "../../../lib/runtime/reflection-contracts";
 import { guardTypedReflection } from "../../../lib/runtime/reflection-guard";
-import { createOpenAIReflectionProvider } from "../../../lib/runtime/openai-reflection-provider";
-import { disabledReflectionResponse, resolveReflection } from "../../../lib/runtime/reflection-runtime";
+import {
+  createOpenAIReflectionProvider,
+  suggestNextActivityLive,
+} from "../../../lib/runtime/openai-reflection-provider";
+import {
+  ReflectionProviderFailure,
+  disabledReflectionResponse,
+  resolveReflection,
+} from "../../../lib/runtime/reflection-runtime";
+import { createGenericNextIdea } from "../../../lib/demo/generic-next-suggestion";
 import { getLiveOpenAICapability } from "../../../lib/runtime/live-openai-server";
+
+const ReflectionBodySchema = z.union([
+  TypedReflectionRequestSchema,
+  NextSuggestionRequestSchema,
+]);
+
+function fallbackNextSuggestionResponse(
+  body: NextSuggestionRequest,
+  code: ReflectionFailureCode,
+) {
+  return NextSuggestionResponseSchema.parse({
+    suggestion: createGenericNextIdea({
+      interestTags: body.approvedInterestTags,
+      supportTags: body.approvedSupportTags,
+      objectLabels: body.objectLabels,
+    }),
+    runtime: {
+      source: "prepared_fallback",
+      diagnostic: {
+        operation: "next_suggestion",
+        code,
+        fallbackUsed: true,
+        retryable: code !== "provider_disabled",
+      },
+    },
+  });
+}
 
 export const runtime = "nodejs";
 const MAX_BODY_BYTES = 4 * 1024;
@@ -45,7 +86,34 @@ export async function POST(request: Request) {
   const declared = Number(request.headers.get("content-length") ?? "0");
   if (Number.isFinite(declared) && declared > MAX_BODY_BYTES) return errorResponse("request_too_large", 413);
   try {
-    const body = TypedReflectionRequestSchema.parse(await readBoundedJson(request));
+    const body = ReflectionBodySchema.parse(await readBoundedJson(request));
+
+    if (body.operation === "next_suggestion") {
+      const guard = guardTypedReflection(body.parentSummary);
+      if (!guard.safe) {
+        return errorResponse(guard.code === "too_long" ? "reflection_too_long" : "reflection_pii_risk", 422);
+      }
+      const capability = getLiveOpenAICapability();
+      if (!capability.enabled) {
+        return NextResponse.json(fallbackNextSuggestionResponse(body, "provider_disabled"));
+      }
+      try {
+        const suggestion = await suggestNextActivityLive(body, {
+          apiKey: capability.apiKey,
+          signal: request.signal,
+        });
+        return NextResponse.json(NextSuggestionResponseSchema.parse({
+          suggestion,
+          runtime: { source: "live_provider" },
+        }));
+      } catch (error) {
+        const code = error instanceof ReflectionProviderFailure
+          ? error.code
+          : "provider_unexpected_failure";
+        return NextResponse.json(fallbackNextSuggestionResponse(body, code));
+      }
+    }
+
     const guard = guardTypedReflection(body.reflection.text);
     if (!guard.safe) {
       return errorResponse(guard.code === "too_long" ? "reflection_too_long" : "reflection_pii_risk", 422);
