@@ -15,6 +15,7 @@ import { SortTool } from "./sort-tool";
 import { MeasureTool } from "./measure-tool";
 import { FieldJournalTool } from "./field-journal-tool";
 import {
+  hasValidKit,
   canCreateKitchenSoundNextSuggestion,
   canStartKitchenSoundQuest,
   createInitialKitchenSoundDemoState,
@@ -41,6 +42,7 @@ import {
 } from "../lib/demo/approved-quest-templates";
 import { findLearningFocus } from "../lib/data/learning-focuses";
 import { isUnderThreeCategory } from "../lib/demo/age-band-fallbacks";
+import { containsHardDenylistedTerm } from "../lib/demo/hard-denylist";
 import { DEFAULT_DEMO_CITY_LABEL, demoCities, findDemoCity } from "../lib/demo/demo-cities";
 import { fetchLiveWeatherTags } from "../lib/demo/weather-lookup";
 import { createGenericNextIdea } from "../lib/demo/generic-next-suggestion";
@@ -171,6 +173,7 @@ const phaseProgress: Record<KitchenSoundDemoPhase, string> = {
   reflection: "Case file 3 of 4 · Parent choice",
   observation_review: "Case file 3 of 4 · Review what you noticed",
   next_suggestion: "Case file 4 of 4 · One try-next idea",
+  kit_adjust: "Case file 4 of 4 · Adjust the objects",
   complete: "Case file 4 of 4 · All done",
 };
 
@@ -239,6 +242,9 @@ export function KitchenSoundDemo() {
   const [weatherLookupMessage, setWeatherLookupMessage] = useState<string | null>(null);
   const [nextIdeaStatus, setNextIdeaStatus] = useState<"idle" | "loading">("idle");
   const [nextCycleStatus, setNextCycleStatus] = useState<"idle" | "loading">("idle");
+  const [adjustAddText, setAdjustAddText] = useState<string>("");
+  const [adjustAddStatus, setAdjustAddStatus] = useState<"idle" | "loading" | "error">("idle");
+  const [adjustAddMessage, setAdjustAddMessage] = useState<string | null>(null);
   const [soundTrail, setSoundTrail] = useState<string[]>([]);
   const [predictionChoice, setPredictionChoice] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState("");
@@ -341,6 +347,9 @@ export function KitchenSoundDemo() {
     setWeatherLookupMessage(null);
     setNextIdeaStatus("idle");
     setNextCycleStatus("idle");
+    setAdjustAddText("");
+    setAdjustAddStatus("idle");
+    setAdjustAddMessage(null);
     setSoundTrail([]);
     setTypedMaterialText("");
     setPhotoPreviewUrl(null);
@@ -417,6 +426,46 @@ export function KitchenSoundDemo() {
     if (photoInputRef.current) photoInputRef.current.value = "";
     transitionDemo({ type: "SET_AGE_STAGE", ageStage });
     setAnnouncement(`${findDemoAgeStageOption(ageStage).label} selected.`);
+  }
+
+  async function vetAndAddObjects() {
+    const guarded = guardTypedObjectLabels(adjustAddText);
+    if (!guarded.safe) {
+      setAdjustAddStatus("error");
+      setAdjustAddMessage(
+        guarded.code === "empty" ? "Type one to five everyday object names first."
+          : guarded.code === "too_many" ? "List up to five object names."
+            : guarded.code === "too_long" ? "Keep each object name to 80 characters or fewer."
+              : "Remove possible private details or unsafe items first.",
+      );
+      return;
+    }
+    setAdjustAddStatus("loading");
+    setAdjustAddMessage(null);
+    try {
+      const response = await fetch("/api/live-experience", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-rummagelab-operation": "typed_object_inventory",
+        },
+        body: JSON.stringify({ operation: "typed_object_inventory", objectLabels: guarded.objectLabels, ageStage: state.selectedAgeStage }),
+      });
+      if (response.status === 429) {
+        setAdjustAddStatus("error");
+        setAdjustAddMessage("Live requests are briefly rate-limited. Try again in a few minutes.");
+        return;
+      }
+      const payload = PhotoInventoryResponseSchema.parse(await response.json());
+      const candidates = photoInventoryToCandidates(payload.inventory);
+      transitionDemo({ type: "ADD_VETTED_CANDIDATES", candidates });
+      setAdjustAddText("");
+      setAdjustAddStatus("idle");
+      setAdjustAddMessage("Vetted and added below. Tick each object you actually have and consider safe.");
+    } catch {
+      setAdjustAddStatus("error");
+      setAdjustAddMessage("The object could not be vetted right now. Try again or continue with the current kit.");
+    }
   }
 
   async function tryIdeaNow() {
@@ -2060,6 +2109,16 @@ export function KitchenSoundDemo() {
                     )}
                   </button>
                 ) : null}
+                {livePhotoAnalysisAvailable ? (
+                  <button
+                    className="secondary-button"
+                    disabled={nextCycleStatus === "loading"}
+                    onClick={() => transitionDemo({ type: "OPEN_KIT_ADJUST" })}
+                    type="button"
+                  >
+                    Adjust objects first
+                  </button>
+                ) : null}
                 <button className="secondary-button" onClick={resetDemo} type="button">
                   Reset demo
                 </button>
@@ -2072,6 +2131,165 @@ export function KitchenSoundDemo() {
                 </p>
               ) : null}
             </article>
+          </section>
+        ) : null}
+
+        {state.phase === "kit_adjust" && state.nextSuggestion ? (
+          <section className="stage" data-phase="kit-adjust">
+            <StageHeader
+              deck="Remove objects you are done with, or vet a new one by name. Every addition passes the same safety gates as day one, and you confirm each object yourself."
+              eyebrow={phaseProgress[state.phase]}
+              headingRef={stageHeadingRef}
+              title="Adjust the objects"
+            />
+
+            <div className="quest-layout">
+              <div>
+                <article className="notebook-card">
+                  <p className="panel-kicker">Your vetted objects</p>
+                  <h2 className="panel-title">Tick what stays in play</h2>
+                  <p className="parent-cue">
+                    Unticked objects stay vetted but leave the kit. The next
+                    activity will adapt the accepted idea to whatever is ticked.
+                  </p>
+                  <div className="check-list">
+                    {state.intakeCandidates.map((item) => {
+                      const checked = state.confirmedObjects.some(
+                        (object) => object.id === item.id,
+                      );
+                      const blockedForUnderThree =
+                        underThreeSelected && !isUnderThreeCategory(item.category);
+                      return (
+                        <label className="check-row" key={item.id}>
+                          <input
+                            checked={checked}
+                            disabled={blockedForUnderThree}
+                            onChange={() =>
+                              dispatch({ type: "TOGGLE_OBJECT", id: item.id })
+                            }
+                            type="checkbox"
+                          />
+                          <span className="check-copy">
+                            {item.label}
+                            <span className="check-detail">
+                              {materialDetails[item.category]}
+                            </span>
+                            {blockedForUnderThree ? (
+                              <span className="check-warning" role="note">
+                                <strong>Not for under-three:</strong>{" "}
+                                Only large containers, soft cloth, board books, and large soft balls can be confirmed for this band.
+                              </span>
+                            ) : null}
+                            {item.warnings.length > 0 ? (
+                              <span className="check-warning" role="note">
+                                <strong>
+                                  {item.safetyLevel === "caution" ? "Caution" : "Note"}:
+                                </strong>{" "}
+                                {item.warnings.join(" ")} A grown-up decides whether to include it.
+                              </span>
+                            ) : null}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                  {(() => {
+                    const ideaText = `${state.nextSuggestion.title} ${state.nextSuggestion.invitation}`.toLowerCase();
+                    const mentioned = state.intakeCandidates
+                      .filter((item) => !state.confirmedObjects.some((object) => object.id === item.id))
+                      .filter((item) => ideaText.includes(item.label.toLowerCase()))
+                      .map((item) => item.label);
+                    return mentioned.length > 0 ? (
+                      <p className="check-warning" role="note">
+                        <strong>Heads up:</strong> the idea mentions {mentioned.join(" and ")} — the next activity will adapt to the objects you keep ticked.
+                      </p>
+                    ) : null;
+                  })()}
+                </article>
+              </div>
+
+              <div>
+                <article className="notebook-card">
+                  <p className="panel-kicker">Add an object</p>
+                  <h2 className="panel-title">Vet something new by name</h2>
+                  {state.nextSuggestion.optionalObjectIdeas.filter((label) => !containsHardDenylistedTerm(label)).length > 0 ? (
+                    <>
+                      <p className="parent-cue">
+                        The idea suggests these could help — have one? Tap to
+                        prefill, then vet it:
+                      </p>
+                      <div className="chip-row">
+                        {state.nextSuggestion.optionalObjectIdeas
+                          .filter((label) => !containsHardDenylistedTerm(label))
+                          .map((label) => (
+                            <button
+                              className="secondary-button"
+                              key={label}
+                              onClick={() => setAdjustAddText(label)}
+                              type="button"
+                            >
+                              {label}
+                            </button>
+                          ))}
+                      </div>
+                    </>
+                  ) : (
+                    <p className="parent-cue">
+                      Type one to five everyday object names. GPT-5.6 vets each
+                      one with cautions; nothing joins the kit until you tick it.
+                    </p>
+                  )}
+                  <label className="text-field">
+                    Object names
+                    <input
+                      autoComplete="off"
+                      maxLength={200}
+                      onChange={(event) => setAdjustAddText(event.currentTarget.value)}
+                      type="text"
+                      value={adjustAddText}
+                    />
+                  </label>
+                  <div className="button-row">
+                    <button
+                      className="primary-button"
+                      disabled={!adjustAddText.trim() || adjustAddStatus === "loading"}
+                      onClick={() => void vetAndAddObjects()}
+                      type="button"
+                    >
+                      {adjustAddStatus === "loading" ? (
+                        <>
+                          <span className="loading-spinner loading-spinner--inline" aria-hidden="true" />
+                          Vetting…
+                        </>
+                      ) : (
+                        "Vet & add with GPT-5.6"
+                      )}
+                    </button>
+                  </div>
+                  {adjustAddMessage ? (
+                    <p className={adjustAddStatus === "error" ? "input-error" : "privacy-note"} role={adjustAddStatus === "error" ? "alert" : "status"}>
+                      {adjustAddMessage}
+                    </p>
+                  ) : null}
+
+                  <p className="gate-note" aria-live="polite">
+                    {hasValidKit(state)
+                      ? "Ready: the adjusted kit can shape the next activity."
+                      : "Keep at least one confirmed, age-appropriate object to continue."}
+                  </p>
+                  <div className="button-row">
+                    <button
+                      className="primary-button"
+                      disabled={!hasValidKit(state)}
+                      onClick={() => transitionDemo({ type: "CLOSE_KIT_ADJUST" })}
+                      type="button"
+                    >
+                      Done — back to the idea
+                    </button>
+                  </div>
+                </article>
+              </div>
+            </div>
           </section>
         ) : null}
 

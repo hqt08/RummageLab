@@ -5,6 +5,7 @@ export type NextIdeaDraft = {
   durationMinutes: 5 | 8 | 10;
   invitation: string;
   connection: string;
+  optionalObjectIdeas?: string[];
 };
 
 const interestPhrases: Partial<Record<DemoObservationTag, string>> = {
@@ -45,5 +46,6 @@ export function createGenericNextIdea(input: {
     connection: support
       ? `Repeats what caught their interest while giving one extra gentle practice at ${support.replace(/_/g, " ")}.`
       : "Repeats what caught their interest one more time while it still feels fun.",
+    optionalObjectIdeas: [],
   };
 }

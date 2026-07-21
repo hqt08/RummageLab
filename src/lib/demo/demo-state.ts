@@ -55,6 +55,7 @@ export type KitchenSoundDemoPhase =
   | "reflection"
   | "observation_review"
   | "next_suggestion"
+  | "kit_adjust"
   | "complete";
 
 export type ObservationDraft = {
@@ -95,6 +96,8 @@ export type NextActivitySuggestionState = {
     supportTags: DemoObservationTag[];
   };
   origin: "prepared" | "live" | "fallback";
+  /** Optional model-suggested object labels; text only until vetted+confirmed. */
+  optionalObjectIdeas: string[];
 };
 
 export type KitchenSoundDemoAction =
@@ -131,6 +134,12 @@ export type KitchenSoundDemoAction =
     }
   | { type: "START_QUEST"; experience?: ExperienceSpec }
   | { type: "START_NEXT_CYCLE"; experience: ExperienceSpec }
+  | { type: "OPEN_KIT_ADJUST" }
+  | { type: "CLOSE_KIT_ADJUST" }
+  | {
+      type: "ADD_VETTED_CANDIDATES";
+      candidates: VettedCandidate[];
+    }
   | { type: "FINISH_QUEST" }
   | { type: "SKIP_REFLECTION" }
   | { type: "REVIEW_SEEDED_OBSERVATION" }
@@ -180,6 +189,23 @@ function toggleValue<T>(values: readonly T[], value: T): T[] {
   return values.includes(value)
     ? values.filter((candidate) => candidate !== value)
     : [...values, value];
+}
+
+/** Phase-agnostic: do the current confirmations form a valid, startable kit? */
+export function hasValidKit(state: KitchenSoundDemoState): boolean {
+  return canStartApprovedQuest({
+    confirmedObjects: state.confirmedObjects.map((object) => ({
+      id: object.id,
+      category: object.category,
+      label: object.label,
+    })),
+    candidateIds: state.intakeCandidates.map((candidate) => candidate.id),
+    approvedWeatherTags: state.selectedWeatherTags,
+    parentApprovedWeather: state.parentApprovedWeather,
+    parentConfirmedSafety: state.parentConfirmedSafety,
+    materialSource: state.materialSource,
+    ageStage: state.selectedAgeStage,
+  });
 }
 
 export function canStartKitchenSoundQuest(
@@ -316,7 +342,7 @@ export function kitchenSoundDemoReducer(
       const candidate = state.intakeCandidates.find(
         (item) => item.id === action.id,
       );
-      if (state.phase !== "kit_review" || !candidate) {
+      if ((state.phase !== "kit_review" && state.phase !== "kit_adjust") || !candidate) {
         return state;
       }
       // Under-three bands may confirm only the smaller approved allowlist.
@@ -536,6 +562,7 @@ export function kitchenSoundDemoReducer(
       const nextSuggestion = {
         ...createKitchenSoundNextSuggestion(approvedNextActivityContext),
         origin: "prepared" as const,
+        optionalObjectIdeas: [],
       };
 
       return {
@@ -546,6 +573,27 @@ export function kitchenSoundDemoReducer(
         nextSuggestion,
       };
     }
+
+    case "OPEN_KIT_ADJUST":
+      return state.phase === "next_suggestion" && state.nextSuggestion
+        ? { ...state, phase: "kit_adjust" }
+        : state;
+
+    case "CLOSE_KIT_ADJUST":
+      return state.phase === "kit_adjust" ? { ...state, phase: "next_suggestion" } : state;
+
+    case "ADD_VETTED_CANDIDATES":
+      // Unlike SET_OBJECT_CANDIDATES (fresh intake), mid-loop additions extend
+      // the vetted pool without discarding what the parent already confirmed.
+      return state.phase === "kit_adjust"
+        ? {
+            ...state,
+            intakeCandidates: dedupeVettedCandidates([
+              ...state.intakeCandidates,
+              ...action.candidates,
+            ]),
+          }
+        : state;
 
     case "START_NEXT_CYCLE": {
       // The loop re-enters at the activity phase: every confirmation the
@@ -602,6 +650,7 @@ export function kitchenSoundDemoReducer(
         nextSuggestion: {
           id: action.origin === "live" ? "live-next-idea" : "fallback-next-idea",
           ...action.idea,
+          optionalObjectIdeas: action.idea.optionalObjectIdeas ?? [],
           basedOnTags: {
             interestTags: [...approvedNextActivityContext.interestTags],
             supportTags: [...approvedNextActivityContext.supportTags],

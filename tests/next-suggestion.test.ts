@@ -60,7 +60,7 @@ describe("live next-suggestion author", () => {
       apiKey: "development-key",
       fetchImpl,
     });
-    expect(result).toEqual(idea);
+    expect(result).toEqual({ ...idea, optionalObjectIdeas: [] });
     const body = JSON.parse(String((fetchImpl as unknown as ReturnType<typeof vi.fn>).mock.calls[0]?.[1]?.body));
     expect(body.store).toBe(false);
     expect(body.text.format.name).toBe("next_activity_idea");
