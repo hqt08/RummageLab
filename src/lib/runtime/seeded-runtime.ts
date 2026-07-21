@@ -54,6 +54,7 @@ export const SeededKitchenSoundExperienceRequestSchema = z
   .object({
     fixtureId: z.literal("kitchen-sound-detectives"),
     activityContext: ExperienceRequestSchema.shape.activityContext,
+    guidance: ExperienceRequestSchema.shape.guidance,
   })
   .strict()
   .superRefine((request, refinementContext) => {
@@ -236,6 +237,7 @@ export async function resolveExperience(
     const experience = validateExperienceForContext(
       await provider.selectExperience({
         activityContext: parsedRequest.activityContext,
+        ...(parsedRequest.guidance ? { guidance: parsedRequest.guidance } : {}),
       }),
       parsedRequest.activityContext,
     );

@@ -9,6 +9,7 @@ import {
 } from "../../../lib/runtime/multipart-photo";
 import {
   ExperienceResponseSchema,
+  NextIdeaGuidanceSchema,
   PhotoInventoryResponseSchema,
 } from "../../../lib/runtime/contracts";
 import {
@@ -38,6 +39,8 @@ const ExperienceBodySchema = z.object({
   operation: z.literal("experience_selection"),
   fixtureId: z.literal("kitchen-sound-detectives"),
   activityContext: ActivityContextSchema,
+  /** Parent-accepted follow-up idea; presence opts the request into live generation. */
+  guidance: NextIdeaGuidanceSchema.optional(),
 }).strict();
 
 const TypedObjectInventoryBodySchema = z.object({
@@ -218,7 +221,9 @@ export async function POST(request: Request) {
         return invalidRequest("live_typed_mapping_unavailable", 503);
       }
     }
-    if (body.activityContext.materialSource !== "seeded_demo") {
+    // A guided request ("Try this idea now") is billable live generation even
+    // from the seeded kit; only the plain deterministic seeded path is exempt.
+    if (body.activityContext.materialSource !== "seeded_demo" || body.guidance) {
       const decision = checkRateLimit(clientKeyFromHeaders(request.headers));
       if (!decision.allowed) return rateLimitedResponse(decision.retryAfterSeconds);
     }
@@ -231,6 +236,7 @@ export async function POST(request: Request) {
     const result = await resolveExperience({
       fixtureId: body.fixtureId,
       activityContext: body.activityContext,
+      ...(body.guidance ? { guidance: body.guidance } : {}),
     }, provider);
     return NextResponse.json(ExperienceResponseSchema.parse({
       ...result,

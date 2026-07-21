@@ -130,6 +130,7 @@ export type KitchenSoundDemoAction =
       confirmed: boolean;
     }
   | { type: "START_QUEST"; experience?: ExperienceSpec }
+  | { type: "START_NEXT_CYCLE"; experience: ExperienceSpec }
   | { type: "FINISH_QUEST" }
   | { type: "SKIP_REFLECTION" }
   | { type: "REVIEW_SEEDED_OBSERVATION" }
@@ -543,6 +544,44 @@ export function kitchenSoundDemoReducer(
         reviewedObservation,
         approvedNextActivityContext,
         nextSuggestion,
+      };
+    }
+
+    case "START_NEXT_CYCLE": {
+      // The loop re-enters at the activity phase: every confirmation the
+      // parent gave (objects, weather, age band, safety) is unchanged and
+      // carries forward; only the reflection state from the finished cycle is
+      // cleared. The context is rebuilt from that same confirmed state so the
+      // usual schema gates re-run.
+      if (state.phase !== "next_suggestion" || !state.nextSuggestion) {
+        return state;
+      }
+      let activityContext: ActivityContext;
+      try {
+        activityContext = createApprovedActivityContext({
+          ageStage: state.selectedAgeStage,
+          materialSource: state.materialSource,
+          confirmedMaterials: state.confirmedObjects.map((object) => ({
+            allowedMaterialCategory: object.category,
+            label: object.label,
+          })),
+          approvedWeatherTags: state.selectedWeatherTags,
+          weatherSource: state.weatherSource,
+          parentConfirmedSafety: state.parentConfirmedSafety,
+        });
+      } catch {
+        return state;
+      }
+      return {
+        ...state,
+        phase: "quest",
+        activityContext,
+        experience: action.experience,
+        reflectionSkipped: false,
+        observationDraft: null,
+        reviewedObservation: null,
+        approvedNextActivityContext: null,
+        nextSuggestion: null,
       };
     }
 

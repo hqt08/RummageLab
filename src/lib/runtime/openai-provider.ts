@@ -469,15 +469,17 @@ export function createOpenAIExperienceProvider(
     async selectExperience(request) {
       const parsed = ExperienceRequestSchema.parse(request);
       const context = parsed.activityContext;
+      const guidance = parsed.guidance;
       // A reviewed fallback must exist so a failed/rejected generation is
       // always recoverable to a safe activity for this context.
       if (availableApprovedQuestTemplateIds(context).length === 0) {
         throw new RuntimeProviderFailure("provider_context_mismatch");
       }
       // The prepared kit stays fully deterministic (no model call) — the
-      // reliable judge/demo golden path. Live photo/typed intake gets a
-      // freshly authored, context-tailored activity instead.
-      if (context.materialSource === "seeded_demo") {
+      // reliable judge/demo golden path. Guidance is the explicit parent
+      // opt-in to the live loop ("Try this idea now"), so a guided request
+      // generates live even from the seeded kit.
+      if (context.materialSource === "seeded_demo" && !guidance) {
         return deterministicApprovedQuestForContext(context);
       }
       const confirmed = context.confirmedMaterials.map((material) => ({
@@ -487,6 +489,11 @@ export function createOpenAIExperienceProvider(
       const confirmedCategories = [...new Set(confirmed.map((item) => item.category))];
       const weatherTags = context.weather?.approvedTags ?? [];
       const objectLabels = JSON.stringify(confirmed.map((item) => item.label));
+      // The accepted idea is a theme to adapt to the confirmed objects, not a
+      // literal script; tags below it are the parent-approved constraints.
+      const guidanceText = guidance
+        ? ` The parent reviewed feedback from the previous activity and accepted this follow-up idea — implement it, adapted to the confirmed objects: title ${JSON.stringify(guidance.ideaTitle)}; invitation ${JSON.stringify(guidance.ideaInvitation)}. Build on the parent-approved interest tags ${JSON.stringify(guidance.interestTags)} and gently practice the support tags ${JSON.stringify(guidance.supportTags)}.`
+        : "";
 
       // Under-three bands: author a caregiver-led, screen-free RummageMoment
       // (no child tool) instead of a quest.
@@ -497,7 +504,7 @@ export function createOpenAIExperienceProvider(
           momentGenerationJsonSchemaForAge(context.ageStage),
           [{
             type: "input_text",
-            text: `Author one short, gentle, caregiver-led moment for a ${context.ageStage} child using these parent-confirmed large everyday objects. This is screen-free for the child: the adultScript (2-5 short lines) tells the grown-up what to do and say, referring to the objects by their labels. Rules: ageStage "${context.ageStage}"; experienceMode "${mode}"; developmentalFocusIds only from ${JSON.stringify(DEVELOPMENTAL_FOCUS_ID_ENUM)} (1-3); approvedMaterialCategories only from ${JSON.stringify(confirmedCategories)}; list real hazards to keep away in forbiddenMaterialCategories; calm, supervised, no mouthing risks, appropriate for the weather tags ${JSON.stringify(weatherTags)} and an ${context.setting} setting. No URLs, code, brand names, or real names. Confirmed objects: ${objectLabels}. Context: ${JSON.stringify(context)}`,
+            text: `Author one short, gentle, caregiver-led moment for a ${context.ageStage} child using these parent-confirmed large everyday objects. This is screen-free for the child: the adultScript (2-5 short lines) tells the grown-up what to do and say, referring to the objects by their labels. Rules: ageStage "${context.ageStage}"; experienceMode "${mode}"; developmentalFocusIds only from ${JSON.stringify(DEVELOPMENTAL_FOCUS_ID_ENUM)} (1-3); approvedMaterialCategories only from ${JSON.stringify(confirmedCategories)}; list real hazards to keep away in forbiddenMaterialCategories; calm, supervised, no mouthing risks, appropriate for the weather tags ${JSON.stringify(weatherTags)} and an ${context.setting} setting. No URLs, code, brand names, or real names.${guidanceText} Confirmed objects: ${objectLabels}. Context: ${JSON.stringify(context)}`,
           }],
           GENERATION_TIMEOUT_MS,
           options.reasoningEffort ?? "low",
@@ -512,7 +519,7 @@ export function createOpenAIExperienceProvider(
         questGenerationJsonSchemaForAge(context.ageStage),
         [{
           type: "input_text",
-          text: `Author one short, safe, grown-up-led activity for a ${context.ageStage} child, tailored to these parent-confirmed everyday objects and context. Refer to the objects by their labels in the steps. Rules: experienceMode "guided_quest"; ageStage "${context.ageStage}"; 2-6 steps, each minute within 0..${context.availableMinutes}; choose developmentalFocusIds only from ${JSON.stringify(DEVELOPMENTAL_FOCUS_ID_ENUM)}; use materials only from ${JSON.stringify(confirmedCategories)}; choose exactly one tool from sort, measure, predict, sound_mix, or field_journal; keep it ${context.setting}, calm, non-recording, and appropriate for the weather tags ${JSON.stringify(weatherTags)}${context.ageStage === "4-6y" ? "; pitch the challenge for a 5-6 year old: predicting, testing, comparing, and explaining" : ""}. activitySummary is one short parent-facing sentence describing the activity. No URLs, code, brand names, or real names. Confirmed objects: ${objectLabels}. Context: ${JSON.stringify(context)}`,
+          text: `Author one short, safe, grown-up-led activity for a ${context.ageStage} child, tailored to these parent-confirmed everyday objects and context. Refer to the objects by their labels in the steps. Rules: experienceMode "guided_quest"; ageStage "${context.ageStage}"; 2-6 steps, each minute within 0..${context.availableMinutes}; choose developmentalFocusIds only from ${JSON.stringify(DEVELOPMENTAL_FOCUS_ID_ENUM)}; use materials only from ${JSON.stringify(confirmedCategories)}; choose exactly one tool from sort, measure, predict, sound_mix, or field_journal; keep it ${context.setting}, calm, non-recording, and appropriate for the weather tags ${JSON.stringify(weatherTags)}${context.ageStage === "4-6y" ? "; pitch the challenge for a 5-6 year old: predicting, testing, comparing, and explaining" : ""}. activitySummary is one short parent-facing sentence describing the activity. No URLs, code, brand names, or real names.${guidanceText} Confirmed objects: ${objectLabels}. Context: ${JSON.stringify(context)}`,
         }],
         GENERATION_TIMEOUT_MS,
         options.reasoningEffort ?? "low",
