@@ -88,6 +88,12 @@ export const NextActivitySuggestionSchema = z.object({
   durationMinutes: z.union([z.literal(5), z.literal(8), z.literal(10)]),
   invitation: z.string().trim().min(1).max(240),
   connection: z.string().trim().min(1).max(240),
+  /**
+   * Up to two optional common-household-object labels that would extend the
+   * idea. Text suggestions only: an object enters the kit exclusively through
+   * the normal vetting gates (denylist, GPT mapping, parent confirmation).
+   */
+  optionalObjectIdeas: z.array(z.string().trim().min(1).max(40)).max(2).optional(),
 }).strict();
 
 export const NextSuggestionResponseSchema = z.object({
