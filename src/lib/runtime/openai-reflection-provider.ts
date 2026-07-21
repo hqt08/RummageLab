@@ -7,6 +7,10 @@ import {
   type ReflectionProvider,
 } from "./reflection-contracts";
 import { guardTypedReflection } from "./reflection-guard";
+import { ObservationTagSchema } from "../schemas";
+
+/** Derived from the Zod source of truth so the model enum can never drift. */
+const OBSERVATION_TAG_ENUM = [...ObservationTagSchema.options];
 import { ReflectionProviderFailure, validateReflectionSuggestion } from "./reflection-runtime";
 
 export type OpenAIReflectionProviderOptions = {
@@ -23,8 +27,8 @@ const REFLECTION_JSON_SCHEMA = {
     source: { type: "string", const: "parent_reported" },
     observedEvents: { type: "array", minItems: 1, maxItems: 3, items: { type: "string", minLength: 1, maxLength: 180 } },
     parentSummary: { type: "string", minLength: 1, maxLength: 240 },
-    suggestedInterestTags: { type: "array", minItems: 1, maxItems: 3, uniqueItems: true, items: { type: "string", enum: ["sound_play", "loud_quiet_contrast", "two_beat_pattern", "turn_taking", "descriptive_words", "cause_and_effect", "movement_play", "texture_exploration"] } },
-    suggestedSupportTags: { type: "array", maxItems: 2, uniqueItems: true, items: { type: "string", enum: ["sound_play", "loud_quiet_contrast", "two_beat_pattern", "turn_taking", "descriptive_words", "cause_and_effect", "movement_play", "texture_exploration"] } },
+    suggestedInterestTags: { type: "array", minItems: 1, maxItems: 3, uniqueItems: true, items: { type: "string", enum: OBSERVATION_TAG_ENUM } },
+    suggestedSupportTags: { type: "array", maxItems: 2, uniqueItems: true, items: { type: "string", enum: OBSERVATION_TAG_ENUM } },
     ephemeralOnly: { type: "boolean", const: true }, requiresParentReview: { type: "boolean", const: true }, notAnAssessment: { type: "boolean", const: true },
   },
 } as const;
