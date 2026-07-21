@@ -12,7 +12,6 @@ import {
   kitchenSoundPhotoInventory,
   type DemoObservationTag,
   type DemoWeatherTag,
-  type KitchenSoundNextSuggestion,
 } from "./kitchen-sound-detectives";
 import {
   canStartApprovedQuest,
@@ -26,6 +25,7 @@ import {
   type VettedCandidate,
 } from "./material-intake";
 import { isUnderThreeCategory } from "./age-band-fallbacks";
+import type { NextIdeaDraft } from "./generic-next-suggestion";
 import type { DemoAgeStage } from "./age-stage-options";
 
 /** Prepared-kit candidates, derived from the seeded object inventory. */
@@ -80,7 +80,21 @@ export type KitchenSoundDemoState = {
   observationDraft: ObservationDraft | null;
   reviewedObservation: ParentObservationSuggestion | null;
   approvedNextActivityContext: NextActivityContext | null;
-  nextSuggestion: KitchenSoundNextSuggestion | null;
+  nextSuggestion: NextActivitySuggestionState | null;
+};
+
+/** The one session-only try-next idea, with honest provenance. */
+export type NextActivitySuggestionState = {
+  id: string;
+  title: string;
+  durationMinutes: number;
+  invitation: string;
+  connection: string;
+  basedOnTags: {
+    interestTags: DemoObservationTag[];
+    supportTags: DemoObservationTag[];
+  };
+  origin: "prepared" | "live" | "fallback";
 };
 
 export type KitchenSoundDemoAction =
@@ -133,6 +147,11 @@ export type KitchenSoundDemoAction =
       tag: DemoObservationTag;
     }
   | { type: "CREATE_NEXT_SUGGESTION" }
+  | {
+      type: "APPLY_NEXT_SUGGESTION";
+      idea: NextIdeaDraft;
+      origin: "live" | "fallback";
+    }
   | { type: "RESET" };
 
 export function createInitialKitchenSoundDemoState(): KitchenSoundDemoState {
@@ -513,9 +532,10 @@ export function kitchenSoundDemoReducer(
 
       const approvedNextActivityContext =
         reviewedObservation.nextActivityContext;
-      const nextSuggestion = createKitchenSoundNextSuggestion(
-        approvedNextActivityContext,
-      );
+      const nextSuggestion = {
+        ...createKitchenSoundNextSuggestion(approvedNextActivityContext),
+        origin: "prepared" as const,
+      };
 
       return {
         ...state,
@@ -523,6 +543,32 @@ export function kitchenSoundDemoReducer(
         reviewedObservation,
         approvedNextActivityContext,
         nextSuggestion,
+      };
+    }
+
+    case "APPLY_NEXT_SUGGESTION": {
+      // Same parent-approval gate as the prepared path: a valid reviewed
+      // observation with approved tags must exist before any idea is shown.
+      const reviewedObservation = tryBuildReviewedObservation(state);
+      if (!reviewedObservation) {
+        return state;
+      }
+      const approvedNextActivityContext =
+        reviewedObservation.nextActivityContext;
+      return {
+        ...state,
+        phase: "next_suggestion",
+        reviewedObservation,
+        approvedNextActivityContext,
+        nextSuggestion: {
+          id: action.origin === "live" ? "live-next-idea" : "fallback-next-idea",
+          ...action.idea,
+          basedOnTags: {
+            interestTags: [...approvedNextActivityContext.interestTags],
+            supportTags: [...approvedNextActivityContext.supportTags],
+          },
+          origin: action.origin,
+        },
       };
     }
   }
