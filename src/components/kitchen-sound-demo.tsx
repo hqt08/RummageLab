@@ -494,6 +494,12 @@ export function KitchenSoundDemo() {
         },
         body: JSON.stringify({ operation: "typed_object_inventory", objectLabels: guarded.objectLabels, ageStage: state.selectedAgeStage }),
       });
+      if (response.status === 429) {
+        if (runtimeRequestVersionRef.current !== requestVersion) return;
+        setTypedInventoryStatus("error");
+        setTypedInventoryMessage("Live requests are briefly rate-limited for this public demo. The prepared paths still work; try live again in a few minutes.");
+        return;
+      }
       const payload = PhotoInventoryResponseSchema.parse(await response.json());
       if (runtimeRequestVersionRef.current !== requestVersion) return;
       const result = photoAnalysisResult(payload);
@@ -680,6 +686,12 @@ export function KitchenSoundDemo() {
     body.set("photo", file);
     try {
       const response = await fetch("/api/live-experience", { method: "POST", body });
+      if (response.status === 429) {
+        if (runtimeRequestVersionRef.current !== requestVersion) return;
+        setRuntimePreviewStatus("error");
+        setPhotoError("Live requests are briefly rate-limited for this public demo. The prepared paths still work; try live again in a few minutes.");
+        return;
+      }
       const payload = PhotoInventoryResponseSchema.parse(await response.json());
       if (runtimeRequestVersionRef.current !== requestVersion) return;
       const result = photoAnalysisResult(payload);

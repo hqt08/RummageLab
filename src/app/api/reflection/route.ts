@@ -20,6 +20,10 @@ import {
 } from "../../../lib/runtime/reflection-runtime";
 import { createGenericNextIdea } from "../../../lib/demo/generic-next-suggestion";
 import { getLiveOpenAICapability } from "../../../lib/runtime/live-openai-server";
+import {
+  checkRateLimit,
+  clientKeyFromHeaders,
+} from "../../../lib/runtime/rate-limit";
 
 const ReflectionBodySchema = z.union([
   TypedReflectionRequestSchema,
@@ -53,6 +57,14 @@ const MAX_BODY_BYTES = 4 * 1024;
 
 function errorResponse(code: string, status: number) {
   return NextResponse.json({ error: { code } }, { status });
+}
+
+/** Content-free 429 shared with the live-experience route's billable paths. */
+function rateLimitedResponse(retryAfterSeconds: number) {
+  return NextResponse.json(
+    { error: { code: "rate_limited" } },
+    { status: 429, headers: { "retry-after": String(retryAfterSeconds) } },
+  );
 }
 
 async function readBoundedJson(request: Request): Promise<unknown> {
@@ -97,6 +109,8 @@ export async function POST(request: Request) {
       if (!capability.enabled) {
         return NextResponse.json(fallbackNextSuggestionResponse(body, "provider_disabled"));
       }
+      const decision = checkRateLimit(clientKeyFromHeaders(request.headers));
+      if (!decision.allowed) return rateLimitedResponse(decision.retryAfterSeconds);
       try {
         const suggestion = await suggestNextActivityLive(body, {
           apiKey: capability.apiKey,
@@ -122,6 +136,8 @@ export async function POST(request: Request) {
     if (!capability.enabled) {
       return NextResponse.json(disabledReflectionResponse());
     }
+    const decision = checkRateLimit(clientKeyFromHeaders(request.headers));
+    if (!decision.allowed) return rateLimitedResponse(decision.retryAfterSeconds);
     const response = await resolveReflection(body, createOpenAIReflectionProvider({
       apiKey: capability.apiKey,
       signal: request.signal,
