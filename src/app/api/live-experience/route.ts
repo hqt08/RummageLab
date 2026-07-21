@@ -238,9 +238,14 @@ export async function POST(request: Request) {
       activityContext: body.activityContext,
       ...(body.guidance ? { guidance: body.guidance } : {}),
     }, provider);
+    // Honest provenance: the deterministic seeded path reports its own source;
+    // only requests that actually ran live generation (non-seeded intake, or a
+    // guided "Try this idea now" cycle) are labelled live_provider.
+    const ranLiveGeneration =
+      body.activityContext.materialSource !== "seeded_demo" || Boolean(body.guidance);
     return NextResponse.json(ExperienceResponseSchema.parse({
       ...result,
-      runtime: result.runtime.source === "seeded_provider"
+      runtime: result.runtime.source === "seeded_provider" && ranLiveGeneration
         ? { source: "live_provider" }
         : result.runtime,
     }));

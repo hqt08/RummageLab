@@ -1025,10 +1025,10 @@ export function KitchenSoundDemo() {
 
   // How the current activity was produced, for an honest parent-facing badge.
   const activityOrigin: "prepared" | "live" | "fallback" =
-    state.materialSource === "seeded_demo"
-      ? "prepared"
-      : liveSource === "live_provider"
-        ? "live"
+    liveSource === "live_provider"
+      ? "live"
+      : state.materialSource === "seeded_demo"
+        ? "prepared"
         : "fallback";
   const activityOriginLabel = {
     prepared: "Prepared demo activity",
