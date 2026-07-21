@@ -52,6 +52,7 @@ export function createApprovedActivityContext(input: {
   materialSource: MaterialIntakeSource;
   confirmedMaterials: readonly ConfirmedMaterialInput[];
   approvedWeatherTags: ApprovedWeatherTags;
+  weatherSource?: NonNullable<ActivityContext["weather"]>["source"];
   parentConfirmedSafety: boolean;
 }): ActivityContext {
   return ActivityContextSchema.parse({
@@ -63,7 +64,7 @@ export function createApprovedActivityContext(input: {
       ...(material.label ? { label: material.label } : {}),
     })),
     weather: {
-      source: "seeded_demo",
+      source: input.weatherSource ?? "seeded_demo",
       approvedTags: [...input.approvedWeatherTags],
       parentApproved: true,
       preciseLocationStored: false,

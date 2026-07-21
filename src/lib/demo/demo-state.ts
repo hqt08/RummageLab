@@ -71,6 +71,7 @@ export type KitchenSoundDemoState = {
   intakeCandidates: VettedCandidate[];
   confirmedObjects: VettedCandidate[];
   selectedWeatherTags: DemoWeatherTag[];
+  weatherSource: "seeded_demo" | "weather_lookup" | "parent_selected";
   parentApprovedWeather: boolean;
   parentConfirmedSafety: boolean;
   activityContext: ActivityContext | null;
@@ -100,6 +101,11 @@ export type KitchenSoundDemoAction =
   | {
       type: "TOGGLE_WEATHER_TAG";
       tag: DemoWeatherTag;
+    }
+  | {
+      type: "SET_WEATHER_TAGS";
+      tags: DemoWeatherTag[];
+      source: "weather_lookup";
     }
   | {
       type: "SET_WEATHER_APPROVED";
@@ -137,6 +143,7 @@ export function createInitialKitchenSoundDemoState(): KitchenSoundDemoState {
     intakeCandidates: seededKitchenCandidates(),
     confirmedObjects: [],
     selectedWeatherTags: [...KITCHEN_SOUND_SUGGESTED_WEATHER_TAGS],
+    weatherSource: "seeded_demo",
     parentApprovedWeather: false,
     parentConfirmedSafety: false,
     activityContext: null,
@@ -325,6 +332,19 @@ export function kitchenSoundDemoReducer(
       return {
         ...state,
         selectedWeatherTags,
+        weatherSource: "parent_selected",
+        parentApprovedWeather: false,
+      };
+    }
+
+    case "SET_WEATHER_TAGS": {
+      if (state.phase !== "kit_review" || action.tags.length < 1 || action.tags.length > 4) {
+        return state;
+      }
+      return {
+        ...state,
+        selectedWeatherTags: [...new Set(action.tags)],
+        weatherSource: action.source,
         parentApprovedWeather: false,
       };
     }
@@ -357,6 +377,7 @@ export function kitchenSoundDemoReducer(
           label: object.label,
         })),
         approvedWeatherTags: state.selectedWeatherTags,
+        weatherSource: state.weatherSource,
         parentConfirmedSafety: state.parentConfirmedSafety,
       });
 
