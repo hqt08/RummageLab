@@ -220,6 +220,29 @@ model usage and rate limits locked down, a prepaid balance of at most $10,
 auto-recharge off, and `RUMMAGELAB_LIVE_OPENAI_ENABLED` as Vercel's manual
 emergency-off switch. Do not use this application as a billing control.
 
+### Per-IP rate limiting on billable operations
+
+Every billable live-model operation (photo analysis, typed object mapping,
+activity generation for non-seeded intake, reflection extraction, and the live
+next-activity idea) passes a per-IP sliding-window limiter before any provider
+work. The deterministic seeded paths are never limited, so the judge-ready demo
+cannot be blocked. Over-limit requests receive a content-free `429` with a
+`Retry-After` header, and the UI degrades to its prepared paths with a clear
+message. Defaults are 20 requests per rolling 60 minutes per IP; tune them with
+environment variables (in Vercel: Project → Settings → Environment Variables):
+
+```bash
+RUMMAGELAB_LIVE_RATE_LIMIT=20            # billable requests per window per IP
+RUMMAGELAB_LIVE_RATE_WINDOW_MINUTES=60   # rolling window length
+```
+
+Scope honestly: the window lives in serverless instance memory, so the
+effective global ceiling is the limit multiplied by concurrently warm
+instances, and it resets on redeploy. It is an abuse cost-floor for a public
+demo — not a billing control and not a substitute for the OpenAI project
+limits above. No IP address is persisted or logged; addresses exist only in
+the instance's in-memory window.
+
 ## Framework checks
 
 ```bash

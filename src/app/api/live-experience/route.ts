@@ -19,6 +19,10 @@ import {
 } from "../../../lib/runtime/seeded-runtime";
 import { getLiveOpenAICapability } from "../../../lib/runtime/live-openai-server";
 import {
+  checkRateLimit,
+  clientKeyFromHeaders,
+} from "../../../lib/runtime/rate-limit";
+import {
   kitchenSoundActivityContext,
 } from "../../../lib/demo/kitchen-sound-detectives";
 import { ActivityContextSchema, AgeStageSchema } from "../../../lib/schemas";
@@ -56,6 +60,14 @@ class BoundedBodyError extends Error {
 
 function invalidRequest(code: string, status = 400) {
   return NextResponse.json({ error: { code } }, { status });
+}
+
+/** Content-free 429 for billable live operations; seeded paths are exempt. */
+function rateLimitedResponse(retryAfterSeconds: number) {
+  return NextResponse.json(
+    { error: { code: "rate_limited" } },
+    { status: 429, headers: { "retry-after": String(retryAfterSeconds) } },
+  );
 }
 
 async function readBoundedJson(request: Request): Promise<unknown> {
@@ -122,6 +134,8 @@ export async function POST(request: Request) {
   }
 
   if (/^multipart\/form-data(?:;|$)/i.test(contentType)) {
+    const decision = checkRateLimit(clientKeyFromHeaders(request.headers));
+    if (!decision.allowed) return rateLimitedResponse(decision.retryAfterSeconds);
     let upload;
     try {
       upload = await parseTransientPhotoMultipart(request);
@@ -177,6 +191,8 @@ export async function POST(request: Request) {
     if (body.operation === "typed_object_inventory") {
       const guarded = guardTypedObjectLabels(body.objectLabels.join("\n"));
       if (!guarded.safe) return invalidRequest("unsafe_typed_object_labels");
+      const decision = checkRateLimit(clientKeyFromHeaders(request.headers));
+      if (!decision.allowed) return rateLimitedResponse(decision.retryAfterSeconds);
       try {
         const provider = createOpenAIExperienceProvider({
           apiKey: capability.apiKey,
@@ -201,6 +217,10 @@ export async function POST(request: Request) {
         runtimeDiagnostic("typed_object_inventory", error);
         return invalidRequest("live_typed_mapping_unavailable", 503);
       }
+    }
+    if (body.activityContext.materialSource !== "seeded_demo") {
+      const decision = checkRateLimit(clientKeyFromHeaders(request.headers));
+      if (!decision.allowed) return rateLimitedResponse(decision.retryAfterSeconds);
     }
     const provider = createOpenAIExperienceProvider({
       apiKey: capability.apiKey,
