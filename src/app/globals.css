@@ -1070,6 +1070,7 @@ legend {
 
 .secondary-button {
   flex: 1 1 10rem;
+  color: var(--ink);
   background: var(--paper-light);
   box-shadow: 3px 3px 0 var(--ink);
 }
