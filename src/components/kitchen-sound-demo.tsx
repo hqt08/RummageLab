@@ -245,6 +245,9 @@ export function KitchenSoundDemo() {
   const [adjustAddText, setAdjustAddText] = useState<string>("");
   const [adjustAddStatus, setAdjustAddStatus] = useState<"idle" | "loading" | "error">("idle");
   const [adjustAddMessage, setAdjustAddMessage] = useState<string | null>(null);
+  const [ideaRefreshStatus, setIdeaRefreshStatus] = useState<
+    "idle" | "loading" | "updated" | "fallback"
+  >("idle");
   const [soundTrail, setSoundTrail] = useState<string[]>([]);
   const [predictionChoice, setPredictionChoice] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState("");
@@ -350,6 +353,7 @@ export function KitchenSoundDemo() {
     setAdjustAddText("");
     setAdjustAddStatus("idle");
     setAdjustAddMessage(null);
+    setIdeaRefreshStatus("idle");
     setSoundTrail([]);
     setTypedMaterialText("");
     setPhotoPreviewUrl(null);
@@ -426,6 +430,63 @@ export function KitchenSoundDemo() {
     if (photoInputRef.current) photoInputRef.current.value = "";
     transitionDemo({ type: "SET_AGE_STAGE", ageStage });
     setAnnouncement(`${findDemoAgeStageOption(ageStage).label} selected.`);
+  }
+
+  async function closeKitAdjust() {
+    const suggestion = state.nextSuggestion;
+    if (!suggestion) return;
+    const currentIds = state.confirmedObjects.map((object) => object.id).sort();
+    const priorIds = [...suggestion.basedOnObjectIds].sort();
+    const kitChanged = JSON.stringify(currentIds) !== JSON.stringify(priorIds);
+    transitionDemo({ type: "CLOSE_KIT_ADJUST" });
+    if (!kitChanged) return;
+
+    // The kit changed, so the idea is re-authored against the new object set
+    // (same approved tags and reviewed summary). Failures keep the flow moving
+    // with a locally built, tag-only idea for the new objects.
+    const draft = state.observationDraft;
+    const objectLabels = state.confirmedObjects.map((object) => object.label.slice(0, 60));
+    const fallbackIdea = createGenericNextIdea({
+      interestTags: suggestion.basedOnTags.interestTags,
+      supportTags: suggestion.basedOnTags.supportTags,
+      objectLabels,
+    });
+    setIdeaRefreshStatus("loading");
+    if (!livePhotoAnalysisAvailable || !draft) {
+      transitionDemo({ type: "REFRESH_NEXT_SUGGESTION", idea: fallbackIdea, origin: "fallback" });
+      setIdeaRefreshStatus("fallback");
+      return;
+    }
+    try {
+      const response = await fetch("/api/reflection", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          operation: "next_suggestion",
+          ageStage: state.selectedAgeStage,
+          weatherTags: state.selectedWeatherTags,
+          objectLabels,
+          previousActivityTitle: activeQuest.title.slice(0, 100),
+          approvedInterestTags: suggestion.basedOnTags.interestTags,
+          approvedSupportTags: suggestion.basedOnTags.supportTags,
+          parentSummary: draft.parentSummary,
+        }),
+      });
+      const payload = NextSuggestionResponseSchema.parse(await response.json());
+      const live = payload.runtime.source === "live_provider";
+      transitionDemo({
+        type: "REFRESH_NEXT_SUGGESTION",
+        idea: payload.suggestion,
+        origin: live ? "live" : "fallback",
+      });
+      setIdeaRefreshStatus(live ? "updated" : "fallback");
+      setAnnouncement(live
+        ? "The idea was updated for your adjusted objects."
+        : "A prepared idea for your adjusted objects is ready.");
+    } catch {
+      transitionDemo({ type: "REFRESH_NEXT_SUGGESTION", idea: fallbackIdea, origin: "fallback" });
+      setIdeaRefreshStatus("fallback");
+    }
   }
 
   async function vetAndAddObjects() {
@@ -2091,6 +2152,29 @@ export function KitchenSoundDemo() {
                   ? "Authored live from the tags you approved and your reviewed note, plus the confirmed objects, age band, and approved weather tags. Nothing was stored — one suggestion per completed activity."
                   : "Built only from the approved tags above. No note, photo, city, name, voice, score, or history was used — one suggestion per completed activity."}
               </p>
+              {ideaRefreshStatus === "loading" ? (
+                <p className="gate-note runtime-loading" role="status">
+                  <span className="loading-spinner" aria-hidden="true" />
+                  Updating the idea for your adjusted objects…
+                </p>
+              ) : ideaRefreshStatus === "updated" ? (
+                <p className="privacy-note" role="status">
+                  Idea updated live for your adjusted objects. The tags you
+                  approved still shape it.
+                </p>
+              ) : ideaRefreshStatus === "fallback" ? (
+                <p className="privacy-note" role="status">
+                  A prepared idea for your adjusted objects is shown; the live
+                  author was unavailable.
+                </p>
+              ) : state.nextSuggestion.basedOnObjectIds.slice().sort().join("|") !==
+                state.confirmedObjects.map((object) => object.id).sort().join("|") ? (
+                <p className="check-warning" role="alert">
+                  <strong>Objects changed:</strong> this idea was written for a
+                  different object set. Adjust objects again to refresh it, or
+                  try it now and the activity will adapt to what you kept.
+                </p>
+              ) : null}
               <div className="button-row">
                 {livePhotoAnalysisAvailable ? (
                   <button
@@ -2113,7 +2197,10 @@ export function KitchenSoundDemo() {
                   <button
                     className="secondary-button"
                     disabled={nextCycleStatus === "loading"}
-                    onClick={() => transitionDemo({ type: "OPEN_KIT_ADJUST" })}
+                    onClick={() => {
+                      setIdeaRefreshStatus("idle");
+                      transitionDemo({ type: "OPEN_KIT_ADJUST" });
+                    }}
                     type="button"
                   >
                     Adjust objects first
@@ -2281,7 +2368,7 @@ export function KitchenSoundDemo() {
                     <button
                       className="primary-button"
                       disabled={!hasValidKit(state)}
-                      onClick={() => transitionDemo({ type: "CLOSE_KIT_ADJUST" })}
+                      onClick={() => void closeKitAdjust()}
                       type="button"
                     >
                       Done — back to the idea

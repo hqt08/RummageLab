@@ -141,3 +141,61 @@ describe("suggested-object ideas stay text until vetted", () => {
     expect(result.optionalObjectIdeas).toEqual(["cardboard box"]);
   });
 });
+
+describe("idea refresh after kit changes", () => {
+  it("snapshots the object set the idea was authored against", () => {
+    const atSuggestion = suggestionState();
+    expect(atSuggestion.nextSuggestion?.basedOnObjectIds.slice().sort()).toEqual(
+      atSuggestion.confirmedObjects.map((object) => object.id).sort(),
+    );
+  });
+
+  it("replaces the idea content for the new kit while keeping approved-tag provenance", () => {
+    let state = kitchenSoundDemoReducer(suggestionState(), { type: "OPEN_KIT_ADJUST" });
+    // Remove one object, add and confirm the duck.
+    const removedId = state.confirmedObjects[0].id;
+    state = kitchenSoundDemoReducer(state, { type: "TOGGLE_OBJECT", id: removedId });
+    state = kitchenSoundDemoReducer(state, { type: "ADD_VETTED_CANDIDATES", candidates: [duck] });
+    state = kitchenSoundDemoReducer(state, { type: "TOGGLE_OBJECT", id: duck.id });
+    state = kitchenSoundDemoReducer(state, { type: "CLOSE_KIT_ADJUST" });
+    expect(state.phase).toBe("next_suggestion");
+
+    // The stale snapshot no longer matches the confirmed set (mismatch visible).
+    expect(state.nextSuggestion?.basedOnObjectIds.slice().sort()).not.toEqual(
+      state.confirmedObjects.map((object) => object.id).sort(),
+    );
+
+    const priorTags = state.nextSuggestion!.basedOnTags;
+    const refreshed = kitchenSoundDemoReducer(state, {
+      type: "REFRESH_NEXT_SUGGESTION",
+      idea: {
+        title: "Duck Peek Rounds",
+        durationMinutes: 5,
+        invitation: "Hide the rubber duck under the towel and reveal it together.",
+        connection: "Keeps the pattern interest with the new duck.",
+        optionalObjectIdeas: ["cardboard box"],
+      },
+      origin: "live",
+    });
+    expect(refreshed.nextSuggestion).toMatchObject({
+      id: "live-next-idea",
+      origin: "live",
+      title: "Duck Peek Rounds",
+      optionalObjectIdeas: ["cardboard box"],
+    });
+    // Tag provenance preserved; snapshot now matches the adjusted kit.
+    expect(refreshed.nextSuggestion?.basedOnTags).toEqual(priorTags);
+    expect(refreshed.nextSuggestion?.basedOnObjectIds.slice().sort()).toEqual(
+      refreshed.confirmedObjects.map((object) => object.id).sort(),
+    );
+  });
+
+  it("is a no-op outside the suggestion phase", () => {
+    const adjusting = kitchenSoundDemoReducer(suggestionState(), { type: "OPEN_KIT_ADJUST" });
+    expect(kitchenSoundDemoReducer(adjusting, {
+      type: "REFRESH_NEXT_SUGGESTION",
+      idea: { title: "X", durationMinutes: 5, invitation: "Y", connection: "Z" },
+      origin: "live",
+    })).toBe(adjusting);
+  });
+});

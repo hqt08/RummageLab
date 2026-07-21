@@ -98,6 +98,8 @@ export type NextActivitySuggestionState = {
   origin: "prepared" | "live" | "fallback";
   /** Optional model-suggested object labels; text only until vetted+confirmed. */
   optionalObjectIdeas: string[];
+  /** Snapshot of the confirmed-object ids the idea was authored against. */
+  basedOnObjectIds: string[];
 };
 
 export type KitchenSoundDemoAction =
@@ -139,6 +141,11 @@ export type KitchenSoundDemoAction =
   | {
       type: "ADD_VETTED_CANDIDATES";
       candidates: VettedCandidate[];
+    }
+  | {
+      type: "REFRESH_NEXT_SUGGESTION";
+      idea: NextIdeaDraft;
+      origin: "live" | "fallback";
     }
   | { type: "FINISH_QUEST" }
   | { type: "SKIP_REFLECTION" }
@@ -563,6 +570,7 @@ export function kitchenSoundDemoReducer(
         ...createKitchenSoundNextSuggestion(approvedNextActivityContext),
         origin: "prepared" as const,
         optionalObjectIdeas: [],
+        basedOnObjectIds: state.confirmedObjects.map((object) => object.id),
       };
 
       return {
@@ -571,6 +579,28 @@ export function kitchenSoundDemoReducer(
         reviewedObservation,
         approvedNextActivityContext,
         nextSuggestion,
+      };
+    }
+
+    case "REFRESH_NEXT_SUGGESTION": {
+      // Replaces the idea's content after a kit change while keeping the
+      // parent-approved tag provenance; re-snapshots the objects it now fits.
+      if (state.phase !== "next_suggestion" || !state.nextSuggestion) {
+        return state;
+      }
+      return {
+        ...state,
+        nextSuggestion: {
+          ...state.nextSuggestion,
+          id: action.origin === "live" ? "live-next-idea" : "fallback-next-idea",
+          title: action.idea.title,
+          durationMinutes: action.idea.durationMinutes,
+          invitation: action.idea.invitation,
+          connection: action.idea.connection,
+          optionalObjectIdeas: action.idea.optionalObjectIdeas ?? [],
+          origin: action.origin,
+          basedOnObjectIds: state.confirmedObjects.map((object) => object.id),
+        },
       };
     }
 
@@ -651,6 +681,7 @@ export function kitchenSoundDemoReducer(
           id: action.origin === "live" ? "live-next-idea" : "fallback-next-idea",
           ...action.idea,
           optionalObjectIdeas: action.idea.optionalObjectIdeas ?? [],
+          basedOnObjectIds: state.confirmedObjects.map((object) => object.id),
           basedOnTags: {
             interestTags: [...approvedNextActivityContext.interestTags],
             supportTags: [...approvedNextActivityContext.supportTags],
